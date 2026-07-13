@@ -27,6 +27,10 @@ def test_migrations_create_fresh_database() -> None:
             "family_groups",
             "family_memberships",
             "family_data_permissions",
+            "auth_sessions",
+            "used_refresh_tokens",
+            "email_verification_tokens",
+            "password_reset_tokens",
             "alembic_version",
         } <= tables
 

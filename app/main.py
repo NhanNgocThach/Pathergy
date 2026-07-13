@@ -6,6 +6,7 @@ from app import models
 from app.errors import ServiceError, service_error_handler, validation_error_handler
 from app.routes import (
     allergies,
+    auth,
     family_groups,
     medication_checks,
     medications,
@@ -34,6 +35,7 @@ app.include_router(medications.router)
 app.include_router(medication_checks.router)
 app.include_router(users.router)
 app.include_router(family_groups.router)
+app.include_router(auth.router)
 
 
 @app.get("/", tags=["Health"])

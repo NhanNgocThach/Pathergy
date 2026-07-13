@@ -1,4 +1,11 @@
 from collections.abc import Generator
+import os
+
+os.environ["AUTH_JWT_SECRET"] = "test-jwt-secret-that-is-at-least-32-characters"
+os.environ["AUTH_TOKEN_HASH_SECRET"] = (
+    "test-token-hash-secret-that-is-at-least-32-characters"
+)
+os.environ["AUTH_DEVELOPMENT_MODE"] = "true"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.services.auth_security import auth_rate_limiter
 
 
 @pytest.fixture()
@@ -50,6 +58,7 @@ def client(
         finally:
             db.close()
 
+    auth_rate_limiter.clear()
     app.dependency_overrides[get_db] = override_get_db
     # Avoid entering the app lifespan here: it creates production tables using
     # app.database.engine. The test tables above are already ready to use.
@@ -57,3 +66,4 @@ def client(
     yield test_client
     test_client.close()
     app.dependency_overrides.clear()
+    auth_rate_limiter.clear()

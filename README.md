@@ -19,9 +19,14 @@ Alembic, and Pytest.
 - OWNER, ADMIN, and MEMBER roles
 - Soft leave/removal with membership history retained
 - Separate data-sharing permissions for every family membership
+- Argon2id password hashing and email verification
+- JWT access tokens with 15-minute expiration
+- Hashed 30-day refresh tokens with rotation and replay detection
+- Per-device session management, logout, and session revocation
+- Password reset, password change, account lockout, and rate-limit hooks
 - Swagger documentation and automated tests
 
-This phase does not add passwords, login sessions, JWT, OAuth, QR invitations,
+This phase does not add OAuth, social login, passkeys, biometric login, QR or
 email invitations, or verified legal guardianship.
 
 ## Personal ownership versus family access
@@ -125,6 +130,8 @@ app/
   database.py                SQLite engine and request sessions
   models.py                  All SQLAlchemy database models
   schemas.py                 Patient, allergy, medication schemas
+  auth_schemas.py            Authentication request and response schemas
+  auth_config.py             Environment-based authentication settings
   family_schemas.py          Account, family, membership, permission schemas
   errors.py                  Stable service error response handling
   crud.py                    Existing patient/allergy/history operations
@@ -135,16 +142,20 @@ app/
     medication_checks.py
     users.py
     family_groups.py
+    auth.py
   services/
     rxnorm.py
     screening.py
     accounts.py
     families.py
+    auth.py
+    auth_security.py
 migrations/
   env.py                     Alembic environment
   versions/
     0001_phase3_baseline.py
     0002_accounts_and_families.py
+    0003_authentication.py
 tests/                       Unit, API, migration, and regression tests
 alembic.ini
 requirements.txt
@@ -160,6 +171,11 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
+
+# Generate two different secrets and copy them into .env:
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+
 python -m alembic upgrade head
 ```
 
@@ -177,6 +193,13 @@ python -m uvicorn app.main:app --reload
 - Health check: <http://127.0.0.1:8000/>
 
 ## Development account examples
+
+`POST /users` remains available for the earlier development workflows. Accounts
+created through that endpoint do not have a password and cannot log in. New
+authenticated accounts should use `POST /auth/register`. Authenticated
+registration always creates a new personal profile; it cannot claim an existing
+standalone patient by ID. Existing-profile linking remains a development-only
+`POST /users` behavior.
 
 Create a user and a new personal profile:
 
@@ -205,12 +228,150 @@ GET /users/1
 GET /users/1/profile
 ```
 
+## Authentication
+
+Authentication extends the existing `UserAccount`; it does not create a second
+account type. An authenticated user still owns exactly one personal `Patient`
+profile.
+
+```text
+Register -> verify email -> login
+         -> 15-minute JWT access token
+         -> 30-day opaque refresh token
+         -> rotate refresh token on every refresh
+         -> revoke the session on logout, reset, or replay
+```
+
+### Environment variables
+
+Authentication secrets are required only when an authentication endpoint is used:
+
+- `AUTH_JWT_SECRET`: signs access tokens; use at least 32 random characters.
+- `AUTH_TOKEN_HASH_SECRET`: HMAC-hashes verification, reset, and refresh tokens;
+  use a different value with at least 32 random characters.
+- `AUTH_DEVELOPMENT_MODE`: when `true`, registration and forgot-password
+  responses include development URLs containing their single-use tokens.
+- `AUTH_DEVELOPMENT_BASE_URL`: base URL used for those development links.
+- `AUTH_RATE_LIMIT_PER_MINUTE`: per-process authentication request limit.
+
+Do not commit real secret values. Changing either secret invalidates the tokens
+that depend on it.
+
+### Registration and email verification
+
+```http
+POST /auth/register
+```
+
+```json
+{
+  "email": "fictional.auth@example.com",
+  "display_name": "Fictional Auth Person",
+  "password": "Fictional1!Pass",
+  "confirm_password": "Fictional1!Pass",
+  "profile": {
+    "first_name": "Fictional",
+    "last_name": "Auth",
+    "date_of_birth": "1990-01-01"
+  }
+}
+```
+
+Passwords require at least 10 characters with uppercase, lowercase, number, and
+special characters. Only an Argon2id hash is stored.
+
+In development mode, copy the `token` value from the query string in the returned
+`verification_url`, then submit it in the request body:
+
+```http
+POST /auth/verify-email
+```
+
+```json
+{"token": "single-use-token-from-development-url"}
+```
+
+Verification tokens expire after 24 hours and are stored only as keyed hashes.
+Production mode does not return the URL; a future email-provider integration must
+deliver the same token.
+
+### Login, access tokens, and refresh rotation
+
+Only active, verified accounts with a password may log in:
+
+```http
+POST /auth/login
+```
+
+```json
+{
+  "email": "fictional.auth@example.com",
+  "password": "Fictional1!Pass",
+  "device_name": "Fictional laptop",
+  "device_type": "desktop"
+}
+```
+
+The response contains a 15-minute JWT `access_token` and a 30-day opaque
+`refresh_token`. Send the access token as:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Use `POST /auth/refresh` with the refresh token. Every successful refresh stores
+the old token hash as used, returns a new refresh token, and invalidates the old
+one. Reusing an old token is treated as replay and revokes the entire session.
+No plaintext refresh token is stored.
+
+Access-token validation also checks the database session, so logout, password
+reset, password change, or replay revocation takes effect before the JWT's normal
+expiration.
+
+### Sessions and logout
+
+Each login creates one session containing device metadata, IP address, user agent,
+timestamps, expiration, and revocation state. `GET /auth/sessions` returns only
+active sessions and identifies the current one.
+
+- `POST /auth/logout` revokes the current session.
+- `DELETE /auth/sessions/{session_id}` revokes one session owned by the user.
+- `DELETE /auth/sessions` revokes all of the user's sessions, including the current
+  session.
+
+### Password recovery and change
+
+`POST /auth/forgot-password` always returns the same general message to avoid
+revealing whether an email exists. Development mode includes a reset URL for a
+registered password account. Reset tokens expire after one hour, are single-use,
+and are stored only as keyed hashes.
+
+`POST /auth/reset-password` changes the password and revokes all sessions.
+`POST /auth/change-password` requires a valid access token and the current
+password, then changes the password and revokes all sessions. Both flows require
+the same password-strength rules as registration.
+
+Five consecutive invalid password attempts temporarily lock the account for 15
+minutes. The included rate limiter is an in-memory development hook; it is not a
+shared production rate limiter.
+
+### Production considerations
+
+Production must disable `AUTH_DEVELOPMENT_MODE`, deliver verification/reset links
+through a trusted email provider, use HTTPS, store secrets in a managed secret
+store, rotate secrets deliberately, and replace the in-memory limiter with a
+shared rate-limit backend. Existing health and family routes must not be exposed
+until authenticated-user authorization replaces their development ID inputs.
+Session/IP/user-agent retention and security audit logging also require an explicit
+privacy policy before real deployment.
+
 ## Family workflow examples
 
-There is no authentication system yet. Endpoints use an explicit
-`requesting_user_id` in the request body or query string for development ownership
-checks. IDs are still verified against database relationships; they are not trusted
-automatically.
+Authentication now exists for the `/auth` account and session workflows. Existing
+family endpoints intentionally retain the explicit `requesting_user_id` in the
+request body or query string for backward-compatible development ownership checks.
+They do not yet derive that ID from the JWT. IDs are checked against database
+relationships, but callers can still impersonate another ID on those routes.
 
 Create a group. User `1` becomes its ACTIVE OWNER:
 
@@ -319,6 +480,23 @@ The response membership has `status: "LEFT"` and a `left_at` timestamp.
 | `GET` | `/users/{user_id}/profile` | Retrieve its personal patient profile |
 | `GET` | `/users/{user_id}/family-groups` | List that user's membership history |
 
+### Authentication
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/register` | Register an account and personal profile |
+| `POST` | `/auth/verify-email` | Consume a single-use verification token |
+| `POST` | `/auth/login` | Create a session and access/refresh tokens |
+| `POST` | `/auth/refresh` | Rotate a refresh token and issue a new pair |
+| `POST` | `/auth/logout` | Revoke the current session |
+| `POST` | `/auth/forgot-password` | Start password recovery without email enumeration |
+| `POST` | `/auth/reset-password` | Consume a reset token and revoke sessions |
+| `POST` | `/auth/change-password` | Change password and revoke sessions |
+| `GET` | `/auth/me` | Retrieve the authenticated account |
+| `GET` | `/auth/sessions` | List active sessions |
+| `DELETE` | `/auth/sessions/{session_id}` | Revoke one owned session |
+| `DELETE` | `/auth/sessions` | Revoke all sessions |
+
 ### Family groups and memberships
 
 | Method | Path | Purpose |
@@ -369,25 +547,37 @@ python -m pytest -v
 Tests use isolated temporary or in-memory SQLite databases. RxNorm calls are
 mocked, so the test suite does not require live internet access.
 
+Authentication tests cover registration, duplicate email, Argon2id hashing,
+verification, login, JWT validation, refresh rotation, replay detection, logout,
+session management, password reset/change, lockout, and expired/invalid tokens.
+
 ## Security limitations
 
-- `requesting_user_id` is not authentication and can be impersonated by a caller.
-- There are no passwords, tokens, login sessions, OAuth, verified emails, or audit
-  identity guarantees.
+- Authentication is implemented for `/auth` workflows, but existing patient,
+  allergy, medication-check, development-account, and family routes are not yet
+  protected by JWT dependencies.
+- `requesting_user_id` on family routes is not authenticated and can be
+  impersonated by a caller.
+- There is no OAuth, MFA, verified family consent, or production audit identity.
+- The in-memory rate limiter is per process and is unsuitable for multiple server
+  instances.
+- Development verification/reset URLs expose bearer-like single-use tokens in API
+  responses and must be disabled in production.
 - Family relationship labels are user-provided and are not legal proof.
 - This phase does not verify guardianship or consent.
 - Do not deploy this educational prototype with real health information.
 
 A family membership grants limited access. It does not transfer ownership of the
 personal health profile. Leaving a family group does not delete personal health
-data. This phase does not include real authentication or verified legal
-guardianship.
+data. Authentication does not yet establish verified family relationships,
+guardianship, or consent.
 
 ## Deliberately out of scope
 
-QR and email invitations, passwords, JWT, OAuth, real authentication, doctor
-accounts, prescriptions, document uploads, frontend work, multilingual support,
-AI, AWS, Docker, FHIR, openFDA, DailyMed, drug interactions, food recommendations,
-and allergy-screening changes are not included.
+QR and email invitations, phone/SMS authentication, passkeys, Face ID,
+fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
+document uploads, frontend work, multilingual support, AI, AWS, Docker, FHIR,
+openFDA, DailyMed, drug interactions, food recommendations, and allergy-screening
+changes are not included.
 
 RxNorm documentation: <https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html>

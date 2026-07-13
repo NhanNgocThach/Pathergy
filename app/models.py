@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     text,
@@ -104,6 +105,16 @@ class UserAccount(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     profile: Mapped[Patient] = relationship(back_populates="user_account")
     memberships: Mapped[list["FamilyMembership"]] = relationship(
@@ -112,6 +123,18 @@ class UserAccount(Base):
     created_family_groups: Mapped[list["FamilyGroup"]] = relationship(
         back_populates="creator",
         foreign_keys="FamilyGroup.created_by_user_id",
+    )
+    auth_sessions: Mapped[list["AuthSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    email_verification_tokens: Mapped[list["EmailVerificationToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
 
 
@@ -235,3 +258,98 @@ class FamilyDataPermission(Base):
     )
 
     membership: Mapped[FamilyMembership] = relationship(back_populates="permissions")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.user_id", ondelete="CASCADE"),
+        index=True,
+    )
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    device_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    last_used_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[UserAccount] = relationship(back_populates="auth_sessions")
+    used_refresh_tokens: Mapped[list["UsedRefreshToken"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+
+
+class UsedRefreshToken(Base):
+    __tablename__ = "used_refresh_tokens"
+
+    used_token_id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("auth_sessions.session_id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    used_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    session: Mapped[AuthSession] = relationship(back_populates="used_refresh_tokens")
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    token_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.user_id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[UserAccount] = relationship(back_populates="email_verification_tokens")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    token_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user_accounts.user_id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped[UserAccount] = relationship(back_populates="password_reset_tokens")

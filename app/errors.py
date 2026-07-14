@@ -16,7 +16,11 @@ class ServiceError(Exception):
 
 async def service_error_handler(request: Request, error: ServiceError) -> JSONResponse:
     headers: dict[str, str] = {}
-    if error.code in {"INVALID_ACCESS_TOKEN", "ACCESS_TOKEN_EXPIRED"}:
+    if error.code in {
+        "AUTHENTICATION_REQUIRED",
+        "INVALID_ACCESS_TOKEN",
+        "ACCESS_TOKEN_EXPIRED",
+    }:
         headers["WWW-Authenticate"] = "Bearer"
     if error.status_code == 429:
         headers["Retry-After"] = "60"

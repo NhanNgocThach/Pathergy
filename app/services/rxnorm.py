@@ -1,4 +1,5 @@
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar
 
 import httpx
 
@@ -25,8 +26,72 @@ class IncompleteRxNormResponseError(Exception):
 
 
 class RxNormService:
+    # RxNorm recommends its display-name list for autocomplete. It is large, so
+    # each application process downloads it only once and reuses it.
+    _display_terms: ClassVar[tuple[str, ...] | None] = None
+    _display_terms_lock: ClassVar[Lock] = Lock()
+    _display_term_rxcuis: ClassVar[dict[str, str | None]] = {}
+
     def __init__(self, client: httpx.Client) -> None:
         self.client = client
+
+    def suggest_medications(
+        self,
+        query: str,
+        limit: int,
+    ) -> list[schemas.MedicationSuggestion]:
+        """Return unique RxNorm autocomplete names with stable identifiers."""
+        normalized_query = query.strip().casefold()
+        if not normalized_query:
+            return []
+
+        suggestions: list[schemas.MedicationSuggestion] = []
+        seen_names: set[str] = set()
+        seen_rxcuis: set[str] = set()
+        for term in self._get_display_terms():
+            normalized_term = term.casefold()
+            if not normalized_term.startswith(normalized_query):
+                continue
+            if normalized_term in seen_names:
+                continue
+            seen_names.add(normalized_term)
+
+            rxcui = self._rxcui_for_display_term(term)
+            if rxcui is None or rxcui in seen_rxcuis:
+                continue
+            seen_rxcuis.add(rxcui)
+            suggestions.append(
+                schemas.MedicationSuggestion(
+                    rxcui=rxcui,
+                    name=term,
+                    rank=len(suggestions) + 1,
+                )
+            )
+            if len(suggestions) == limit:
+                break
+        return suggestions
+
+    def _rxcui_for_display_term(self, term: str) -> str | None:
+        cache_key = term.casefold()
+        if cache_key not in RxNormService._display_term_rxcuis:
+            data = self._get_json(
+                "/REST/rxcui.json",
+                params={"name": term, "search": "2", "allsrc": "0"},
+            )
+            try:
+                rxcui = self._first_rxcui(data)
+            except MedicationNotFoundError:
+                rxcui = None
+            RxNormService._display_term_rxcuis[cache_key] = rxcui
+        return RxNormService._display_term_rxcuis[cache_key]
+
+    def _get_display_terms(self) -> tuple[str, ...]:
+        if RxNormService._display_terms is None:
+            with RxNormService._display_terms_lock:
+                if RxNormService._display_terms is None:
+                    data = self._get_json("/REST/displaynames.json")
+                    RxNormService._display_terms = self._parse_display_terms(data)
+        return RxNormService._display_terms
 
     def search_medication(self, drug_name: str) -> schemas.MedicationSearchResponse:
         """Find a normalized RxNorm concept and its active ingredients."""
@@ -114,6 +179,25 @@ class RxNormService:
             "name": name.strip(),
             "tty": tty.strip(),
         }
+
+    @staticmethod
+    def _parse_display_terms(data: dict[str, Any]) -> tuple[str, ...]:
+        display_terms_list = data.get("displayTermsList")
+        if not isinstance(display_terms_list, dict):
+            raise IncompleteRxNormResponseError
+
+        terms = display_terms_list.get("term")
+        if not isinstance(terms, list):
+            raise IncompleteRxNormResponseError
+
+        cleaned_terms = tuple(
+            term.strip()
+            for term in terms
+            if isinstance(term, str) and term.strip()
+        )
+        if not cleaned_terms:
+            raise IncompleteRxNormResponseError
+        return cleaned_terms
 
     @staticmethod
     def _ingredients(

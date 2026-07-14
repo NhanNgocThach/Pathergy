@@ -1,12 +1,14 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, Path
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
+from app import crud, models, schemas
 from app.database import get_db
+from app.family_schemas import FamilyDataType
+from app.routes.auth import get_current_user
 from app.routes.medications import get_rxnorm_service
-from app.routes.patients import require_patient
+from app.services import authorization
 from app.services.rxnorm import (
     IncompleteRxNormResponseError,
     MedicationNotFoundError,
@@ -30,8 +32,11 @@ def check_medication(
     check_request: schemas.MedicationCheckRequest,
     db: Session = Depends(get_db),
     rxnorm_service: RxNormService = Depends(get_rxnorm_service),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> schemas.MedicationCheckResponse:
-    require_patient(db, patient_id)
+    authorization.require_medication_check_access(
+        db, patient_id, current_user.user_id
+    )
     allergies = crud.list_allergies(db, patient_id)
 
     try:
@@ -78,6 +83,25 @@ def check_medication(
         matches=matches,
         message=message,
     )
+
+
+@router.get(
+    "/{patient_id}/screening-history",
+    response_model=list[schemas.SearchHistoryResponse],
+)
+def list_screening_history(
+    patient_id: PatientId,
+    db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
+) -> list[models.SearchHistory]:
+    authorization.require_patient_access(
+        db,
+        patient_id,
+        current_user.user_id,
+        FamilyDataType.screening_history,
+        "view",
+    )
+    return crud.list_search_history(db, patient_id)
 
 
 def unable_to_verify_response(

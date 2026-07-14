@@ -27,6 +27,61 @@ def get_rxnorm_service() -> Generator[RxNormService, None, None]:
 
 
 @router.get(
+    "/suggestions",
+    response_model=schemas.MedicationSuggestionsResponse,
+    responses={
+        502: {"description": "RxNorm failed or returned an incomplete response"},
+        504: {"description": "RxNorm request timed out"},
+    },
+)
+def suggest_medications(
+    search_text: Annotated[
+        str,
+        Query(
+            alias="q",
+            min_length=2,
+            max_length=100,
+            description="Beginning of an RxNorm medication or ingredient name",
+            examples=["para"],
+        ),
+    ],
+    limit: Annotated[int, Query(ge=1, le=10)] = 8,
+    rxnorm_service: RxNormService = Depends(get_rxnorm_service),
+) -> schemas.MedicationSuggestionsResponse:
+    cleaned_query = search_text.strip()
+    if len(cleaned_query) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Medication suggestion query must contain at least 2 characters",
+        )
+
+    try:
+        suggestions = rxnorm_service.suggest_medications(cleaned_query, limit)
+    except RxNormTimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="RxNorm did not respond before the timeout",
+        )
+    except IncompleteRxNormResponseError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="RxNorm returned an incomplete response",
+        )
+    except RxNormUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="RxNorm is currently unavailable",
+        )
+
+    return schemas.MedicationSuggestionsResponse(
+        data=schemas.MedicationSuggestionsData(
+            query=cleaned_query,
+            suggestions=suggestions,
+        ),
+    )
+
+
+@router.get(
     "/search",
     response_model=schemas.MedicationSearchResponse,
     responses={

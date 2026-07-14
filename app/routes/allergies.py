@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import get_db
-from app.routes.patients import require_patient
+from app.family_schemas import FamilyDataType
+from app.routes.auth import get_current_user
+from app.services import authorization
 
 router = APIRouter(prefix="/patients/{patient_id}/allergies", tags=["Allergies"])
 PatientId = Annotated[int, Path(ge=1)]
@@ -36,8 +38,11 @@ def create_allergy(
     patient_id: PatientId,
     allergy_data: schemas.AllergyCreate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> models.Allergy:
-    require_patient(db, patient_id)
+    authorization.require_patient_access(
+        db, patient_id, current_user.user_id, FamilyDataType.allergies, "edit"
+    )
     try:
         return crud.create_allergy(db, patient_id, allergy_data)
     except crud.DuplicateAllergyError:
@@ -48,8 +53,11 @@ def create_allergy(
 def list_allergies(
     patient_id: PatientId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> list[models.Allergy]:
-    require_patient(db, patient_id)
+    authorization.require_patient_access(
+        db, patient_id, current_user.user_id, FamilyDataType.allergies, "view"
+    )
     return crud.list_allergies(db, patient_id)
 
 
@@ -58,8 +66,11 @@ def get_allergy(
     patient_id: PatientId,
     allergy_id: AllergyId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> models.Allergy:
-    require_patient(db, patient_id)
+    authorization.require_patient_access(
+        db, patient_id, current_user.user_id, FamilyDataType.allergies, "view"
+    )
     return require_allergy(db, patient_id, allergy_id)
 
 
@@ -73,8 +84,11 @@ def update_allergy(
     allergy_id: AllergyId,
     allergy_data: schemas.AllergyUpdate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> models.Allergy:
-    require_patient(db, patient_id)
+    authorization.require_patient_access(
+        db, patient_id, current_user.user_id, FamilyDataType.allergies, "edit"
+    )
     allergy = require_allergy(db, patient_id, allergy_id)
     try:
         return crud.update_allergy(db, allergy, allergy_data)
@@ -87,8 +101,11 @@ def delete_allergy(
     patient_id: PatientId,
     allergy_id: AllergyId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ) -> Response:
-    require_patient(db, patient_id)
+    authorization.require_patient_access(
+        db, patient_id, current_user.user_id, FamilyDataType.allergies, "edit"
+    )
     allergy = require_allergy(db, patient_id, allergy_id)
     crud.delete_allergy(db, allergy)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

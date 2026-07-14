@@ -1,8 +1,9 @@
 # Pathergy
 
-Pathergy is a beginner-friendly educational backend about medication safety and
-personal health-data sharing. It uses FastAPI, SQLAlchemy, SQLite, Pydantic,
-Alembic, and Pytest.
+Pathergy is a beginner-friendly educational application about medication safety
+and personal health-data sharing. Its backend uses FastAPI, SQLAlchemy, SQLite
+locally, PostgreSQL for cloud deployment, Pydantic, Alembic, and Pytest. The web application adds a Next.js and TypeScript
+frontend for all currently implemented user-facing APIs.
 
 > Use fictional information only. Pathergy is not medical software, does not
 > provide medical advice, and does not determine whether a medication is safe.
@@ -11,6 +12,7 @@ Alembic, and Pytest.
 
 - Patient and allergy CRUD
 - RxNorm medication and active-ingredient lookup
+- Debounced RxNorm medication-name autocomplete with keyboard navigation
 - Conservative medication/allergy screening
 - Persisted medication screening history
 - Development-only personal user accounts
@@ -24,10 +26,19 @@ Alembic, and Pytest.
 - Hashed 30-day refresh tokens with rotation and replay detection
 - Per-device session management, logout, and session revocation
 - Password reset, password change, account lockout, and rate-limit hooks
+- JWT authorization for patient, allergy, screening, account, and family APIs
+- Ownership and family data-permission enforcement
+- Responsive authentication pages and protected application shell
+- Automatic access-token refresh with single-use refresh-token rotation
+- Frontend form validation, accessible error states, and mocked component tests
+- Dashboard, personal health-profile viewing/editing, and allergy management UI
+- RxNorm medication search, conservative allergy screening, and history UI
+- Family groups, memberships, roles, enforced sharing permissions, and profiles
+- Responsive desktop/mobile navigation and accessible status handling
 - Swagger documentation and automated tests
 
 This phase does not add OAuth, social login, passkeys, biometric login, QR or
-email invitations, or verified legal guardianship.
+email invitations, verified legal guardianship, or unsupported backend features.
 
 ## Personal ownership versus family access
 
@@ -118,16 +129,24 @@ All permissions default to `can_view: false` and `can_edit: false`. A user contr
 the permissions for their own ACTIVE membership. Group ownership does not grant
 automatic access to another adult member's health records.
 
-Some listed data types are not implemented yet. This phase stores their permission
-settings for future compatibility; it does not add family health-data viewing
-endpoints.
+Implemented authorization mappings:
+
+- `BASIC_PROFILE`: view or edit a family member's patient profile.
+- `ALLERGIES`: view or edit a family member's allergy records.
+- `SCREENING_HISTORY`: view screening history; `can_edit` permits creating a
+  history row through a medication check.
+
+A family medication check requires both `ALLERGIES.can_view` and
+`SCREENING_HISTORY.can_edit` on the target member's membership in the same ACTIVE
+family group. Other permission types remain stored for future compatibility and
+do not grant access to unimplemented features.
 
 ## Project structure
 
 ```text
 app/
   main.py                    FastAPI setup and error handlers
-  database.py                SQLite engine and request sessions
+  database.py                SQLite/PostgreSQL engine and request sessions
   models.py                  All SQLAlchemy database models
   schemas.py                 Patient, allergy, medication schemas
   auth_schemas.py            Authentication request and response schemas
@@ -150,6 +169,7 @@ app/
     families.py
     auth.py
     auth_security.py
+    authorization.py          Ownership and family health-data access checks
 migrations/
   env.py                     Alembic environment
   versions/
@@ -157,6 +177,8 @@ migrations/
     0002_accounts_and_families.py
     0003_authentication.py
 tests/                       Unit, API, migration, and regression tests
+frontend/                    Complete Next.js frontend for implemented APIs
+docs/UI_UX_SPECIFICATION.md  Product design and accessibility specification
 alembic.ini
 requirements.txt
 README.md
@@ -191,15 +213,45 @@ python -m uvicorn app.main:app --reload
 - Swagger UI: <http://127.0.0.1:8000/docs>
 - ReDoc: <http://127.0.0.1:8000/redoc>
 - Health check: <http://127.0.0.1:8000/>
+- Deployment health check: <http://127.0.0.1:8000/health>
+
+## Run the web frontend
+
+The backend `.env` must allow the browser origin:
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+AUTH_DEVELOPMENT_BASE_URL=http://localhost:3000
+```
+
+In a second PowerShell window:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000>. See [frontend/README.md](frontend/README.md) for
+the implemented routes, authentication flow, test commands, token-storage
+decision, and current frontend security limitations.
 
 ## Development account examples
 
-`POST /users` remains available for the earlier development workflows. Accounts
-created through that endpoint do not have a password and cannot log in. New
+`POST /users` and `POST /patients` remain available only when
+`AUTH_DEVELOPMENT_MODE=true`, and both require a valid access token. Accounts
+created through `POST /users` do not have a password and cannot log in. New
 authenticated accounts should use `POST /auth/register`. Authenticated
 registration always creates a new personal profile; it cannot claim an existing
 standalone patient by ID. Existing-profile linking remains a development-only
 `POST /users` behavior.
+
+Send the authenticated development actor's token with these requests:
+
+```http
+Authorization: Bearer <access_token>
+```
 
 Create a user and a new personal profile:
 
@@ -253,6 +305,10 @@ Authentication secrets are required only when an authentication endpoint is used
   responses include development URLs containing their single-use tokens.
 - `AUTH_DEVELOPMENT_BASE_URL`: base URL used for those development links.
 - `AUTH_RATE_LIMIT_PER_MINUTE`: per-process authentication request limit.
+- `CORS_ALLOWED_ORIGINS`: comma-separated browser origins permitted to call the
+  API; local defaults are shown in `.env.example`.
+- `DATABASE_URL`: local SQLite URL or a deployed Neon PostgreSQL URL. Standard
+  PostgreSQL URLs use the included Psycopg 3 driver.
 
 Do not commit real secret values. Changing either secret invalidates the tokens
 that depend on it.
@@ -360,18 +416,40 @@ shared production rate limiter.
 Production must disable `AUTH_DEVELOPMENT_MODE`, deliver verification/reset links
 through a trusted email provider, use HTTPS, store secrets in a managed secret
 store, rotate secrets deliberately, and replace the in-memory limiter with a
-shared rate-limit backend. Existing health and family routes must not be exposed
-until authenticated-user authorization replaces their development ID inputs.
-Session/IP/user-agent retention and security audit logging also require an explicit
-privacy policy before real deployment.
+shared rate-limit backend. Session/IP/user-agent retention, consent records, and
+security audit logging also require an explicit privacy policy before real
+deployment.
+
+## Authorization
+
+All patient, allergy, medication-check, screening-history, account/profile, and
+family endpoints require `Authorization: Bearer <access_token>`. FastAPI validates
+the JWT and its database session, then derives the requester from the token's
+subject. Patient IDs, user IDs, group IDs, and membership IDs identify resources;
+they never establish the requester's identity.
+
+The owner of a personal patient profile may use its implemented health APIs. For
+another person's profile, both users must have ACTIVE memberships in the same
+family group and the target member must have enabled the relevant permission.
+OWNER and ADMIN roles control group management only; they do not bypass another
+member's health-data choices.
+
+Authorization failures use stable service errors:
+
+- `401 AUTHENTICATION_REQUIRED` when the Bearer token is missing.
+- `401 INVALID_ACCESS_TOKEN` or `ACCESS_TOKEN_EXPIRED` for an unusable token.
+- `403 FAMILY_ACCESS_DENIED`, `MEMBERSHIP_NOT_ACTIVE`, or `INSUFFICIENT_ROLE`
+  for family-management denial.
+- `403 FAMILY_PERMISSION_DENIED` when active family members lack the target's
+  required data permission.
+- `404 PATIENT_ACCESS_DENIED` for an unrelated or unowned patient, which avoids
+  confirming that another person's record exists.
 
 ## Family workflow examples
 
-Authentication now exists for the `/auth` account and session workflows. Existing
-family endpoints intentionally retain the explicit `requesting_user_id` in the
-request body or query string for backward-compatible development ownership checks.
-They do not yet derive that ID from the JWT. IDs are checked against database
-relationships, but callers can still impersonate another ID on those routes.
+Every family request uses the user derived from the access token. Do not send
+`requesting_user_id`; it is rejected in request bodies and ignored as identity in
+query strings.
 
 Create a group. User `1` becomes its ACTIVE OWNER:
 
@@ -381,7 +459,6 @@ POST /family-groups
 
 ```json
 {
-  "requesting_user_id": 1,
   "name": "Fictional Household"
 }
 ```
@@ -394,7 +471,6 @@ POST /family-groups/1/members
 
 ```json
 {
-  "requesting_user_id": 1,
   "user_id": 2,
   "role": "MEMBER",
   "relationship": "RELATIVE"
@@ -409,7 +485,6 @@ PUT /family-groups/1/members/2
 
 ```json
 {
-  "requesting_user_id": 1,
   "status": "ACTIVE"
 }
 ```
@@ -422,7 +497,6 @@ PUT /family-groups/1/members/2/permissions
 
 ```json
 {
-  "requesting_user_id": 2,
   "permissions": [
     {"data_type": "ALLERGIES", "can_view": true, "can_edit": false},
     {
@@ -443,11 +517,8 @@ Leave without deleting personal data:
 POST /family-groups/1/members/2/leave
 ```
 
-```json
-{
-  "requesting_user_id": 2
-}
-```
+No request body is required. The route verifies that the path's user ID is the
+authenticated user.
 
 The response membership has `status: "LEFT"` and a `left_at` timestamp.
 
@@ -468,8 +539,13 @@ The response membership has `status: "LEFT"` and a `left_at` timestamp.
 | `GET` | `/patients/{patient_id}/allergies/{allergy_id}` | Retrieve an allergy |
 | `PUT` | `/patients/{patient_id}/allergies/{allergy_id}` | Update an allergy |
 | `DELETE` | `/patients/{patient_id}/allergies/{allergy_id}` | Delete an allergy |
+| `GET` | `/medications/suggestions?q={prefix}&limit=8` | Suggest unique RxNorm names and RxCUIs for autocomplete |
 | `GET` | `/medications/search?name={name}` | Search RxNorm ingredients |
 | `POST` | `/patients/{patient_id}/medication-check` | Check recorded allergies and store history |
+| `GET` | `/patients/{patient_id}/screening-history` | List authorized screening history |
+
+All rows in this table except `/`, `/health`, medication suggestions, and medication search require a Bearer access
+token. `POST /patients` is additionally development-only.
 
 ### Development accounts
 
@@ -479,6 +555,10 @@ The response membership has `status: "LEFT"` and a `left_at` timestamp.
 | `GET` | `/users/{user_id}` | Retrieve an account |
 | `GET` | `/users/{user_id}/profile` | Retrieve its personal patient profile |
 | `GET` | `/users/{user_id}/family-groups` | List that user's membership history |
+
+All development-account endpoints require a Bearer token. `POST /users` is also
+disabled when `AUTH_DEVELOPMENT_MODE=false`; account and membership-history reads
+are self-only. Profile reads may use `BASIC_PROFILE.can_view` family access.
 
 ### Authentication
 
@@ -551,18 +631,22 @@ Authentication tests cover registration, duplicate email, Argon2id hashing,
 verification, login, JWT validation, refresh rotation, replay detection, logout,
 session management, password reset/change, lockout, and expired/invalid tokens.
 
+Authorization tests cover missing and invalid tokens, own-profile access,
+unrelated-patient isolation, independent `can_view`/`can_edit` enforcement,
+family health permissions, medication-check permissions, role checks, inactive
+memberships, final-owner protection, and requester-ID impersonation attempts.
+
 ## Security limitations
 
-- Authentication is implemented for `/auth` workflows, but existing patient,
-  allergy, medication-check, development-account, and family routes are not yet
-  protected by JWT dependencies.
-- `requesting_user_id` on family routes is not authenticated and can be
-  impersonated by a caller.
 - There is no OAuth, MFA, verified family consent, or production audit identity.
 - The in-memory rate limiter is per process and is unsuitable for multiple server
   instances.
 - Development verification/reset URLs expose bearer-like single-use tokens in API
   responses and must be disabled in production.
+- The browser client holds its access token in memory and refresh token
+  in `sessionStorage` because the current backend does not issue HttpOnly cookies.
+  This is vulnerable to token theft if an XSS flaw is introduced and is not a
+  final production token-storage design.
 - Family relationship labels are user-provided and are not legal proof.
 - This phase does not verify guardianship or consent.
 - Do not deploy this educational prototype with real health information.
@@ -576,8 +660,19 @@ guardianship, or consent.
 
 QR and email invitations, phone/SMS authentication, passkeys, Face ID,
 fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
-document uploads, frontend work, multilingual support, AI, AWS, Docker, FHIR,
-openFDA, DailyMed, drug interactions, food recommendations, and allergy-screening
-changes are not included.
+document uploads, multilingual support, AI, AWS, Docker, FHIR, openFDA, DailyMed,
+drug interactions, food recommendations, and unsupported backend/frontend
+features are not included.
 
 RxNorm documentation: <https://lhncbc.nlm.nih.gov/RxNav/APIs/RxNormAPIs.html>
+
+## Portfolio cloud deployment
+
+Pathergy is prepared for a GitHub-connected Vercel frontend, Render FastAPI
+backend, and Neon PostgreSQL database. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the exact environment variables,
+Alembic command, automatic deployment flow, authentication limitations, free
+tier cold starts, and steps for returning to local development.
+
+This configuration is for fictional portfolio data only. It is not described as
+production-ready or HIPAA-compliant.

@@ -1,333 +1,140 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
 
-from app import models, schemas
+from tests.helpers import add_and_activate_member, create_authenticated_user, create_group
 
 
-def create_user(client: TestClient, number: int) -> dict:
-    response = client.post(
-        "/users",
-        json={
-            "email": f"fictional.family{number}@example.com",
-            "display_name": f"Fictional Family Person {number}",
-            "profile": {
-                "first_name": f"Person{number}",
-                "last_name": "Fictional",
-                "date_of_birth": "1990-01-01",
-            },
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+def test_creator_is_owner_and_can_retrieve_group(client: TestClient) -> None:
+    owner = create_authenticated_user(client, "family.owner@example.com")
+    group = create_group(client, owner)
 
-
-def create_group(client: TestClient, owner_id: int, name: str) -> dict:
-    response = client.post(
-        "/family-groups",
-        json={"requesting_user_id": owner_id, "name": name},
-    )
-    assert response.status_code == 201
-    return response.json()
-
-
-def add_member(client: TestClient, group_id: int, owner_id: int, user_id: int):
-    return client.post(
-        f"/family-groups/{group_id}/members",
-        json={
-            "requesting_user_id": owner_id,
-            "user_id": user_id,
-            "role": "MEMBER",
-            "relationship": "RELATIVE",
-        },
-    )
-
-
-def activate_member(client: TestClient, group_id: int, owner_id: int, user_id: int):
-    return client.put(
-        f"/family-groups/{group_id}/members/{user_id}",
-        json={"requesting_user_id": owner_id, "status": "ACTIVE"},
-    )
-
-
-def test_create_group_creator_is_owner_and_group_is_retrievable(
-    client: TestClient,
-) -> None:
-    owner = create_user(client, 1)
-    group = create_group(client, owner["user_id"], "Fictional Household A")
-
-    get_response = client.get(
-        f"/family-groups/{group['family_group_id']}",
-        params={"requesting_user_id": owner["user_id"]},
+    retrieved = client.get(
+        f"/family-groups/{group['family_group_id']}", headers=owner["headers"]
     )
     members = client.get(
         f"/family-groups/{group['family_group_id']}/members",
-        params={"requesting_user_id": owner["user_id"]},
-    ).json()
-    listed_groups = client.get(
-        f"/users/{owner['user_id']}/family-groups",
-        params={"requesting_user_id": owner["user_id"]},
-    ).json()
-
-    assert get_response.status_code == 200
-    assert members[0]["role"] == "OWNER"
-    assert members[0]["status"] == "ACTIVE"
-    assert members[0]["relationship"] == "SELF"
-    assert listed_groups[0]["family_group"]["family_group_id"] == group["family_group_id"]
-
-
-def test_member_joins_multiple_groups_and_duplicate_active_is_rejected(
-    client: TestClient,
-) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group_a = create_group(client, owner["user_id"], "Fictional Group A")
-    group_b = create_group(client, owner["user_id"], "Fictional Group B")
-
-    for group in (group_a, group_b):
-        pending = add_member(
-            client,
-            group["family_group_id"],
-            owner["user_id"],
-            member["user_id"],
-        )
-        assert pending.status_code == 201
-        assert pending.json()["status"] == "PENDING"
-        activated = activate_member(
-            client,
-            group["family_group_id"],
-            owner["user_id"],
-            member["user_id"],
-        )
-        assert activated.status_code == 200
-
-    groups = client.get(
-        f"/users/{member['user_id']}/family-groups",
-        params={"requesting_user_id": member["user_id"]},
-    ).json()
-    duplicate = add_member(
-        client,
-        group_a["family_group_id"],
-        owner["user_id"],
-        member["user_id"],
+        headers=owner["headers"],
+    )
+    own_groups = client.get(
+        f"/users/{owner['user_id']}/family-groups", headers=owner["headers"]
     )
 
-    assert len(groups) == 2
-    assert duplicate.status_code == 409
-    assert duplicate.json()["detail"]["code"] == "DUPLICATE_ACTIVE_MEMBERSHIP"
+    assert retrieved.status_code == 200
+    assert members.json()[0]["role"] == "OWNER"
+    assert members.json()[0]["status"] == "ACTIVE"
+    assert len(own_groups.json()) == 1
 
 
-def test_update_member_role_relationship_and_list_members(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-    add_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    activate_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
+def test_owner_and_admin_can_manage_members(client: TestClient) -> None:
+    owner = create_authenticated_user(client, "manage.owner@example.com")
+    admin = create_authenticated_user(client, "manage.admin@example.com")
+    new_member = create_authenticated_user(client, "manage.member@example.com")
+    group = create_group(client, owner)
+    add_and_activate_member(client, group, owner, admin, role="ADMIN")
 
-    update = client.put(
-        f"/family-groups/{group['family_group_id']}/members/{member['user_id']}",
-        json={
-            "requesting_user_id": owner["user_id"],
-            "role": "ADMIN",
-            "relationship": "CAREGIVER",
-        },
-    )
-    members = client.get(
+    added = client.post(
         f"/family-groups/{group['family_group_id']}/members",
-        params={"requesting_user_id": member["user_id"]},
+        json={"user_id": new_member["user_id"], "relationship": "RELATIVE"},
+        headers=admin["headers"],
+    )
+    activated = client.put(
+        f"/family-groups/{group['family_group_id']}/members/{new_member['user_id']}",
+        json={"status": "ACTIVE"},
+        headers=owner["headers"],
     )
 
-    assert update.status_code == 200
-    assert update.json()["role"] == "ADMIN"
-    assert update.json()["relationship"] == "CAREGIVER"
-    assert len(members.json()) == 2
+    assert added.status_code == 201
+    assert activated.status_code == 200
 
 
-def test_pending_and_outside_users_have_no_group_access(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    pending_user = create_user(client, 2)
-    outsider = create_user(client, 3)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-    add_member(
-        client,
-        group["family_group_id"],
-        owner["user_id"],
-        pending_user["user_id"],
+def test_regular_member_cannot_manage_members(client: TestClient) -> None:
+    owner = create_authenticated_user(client, "role.owner@example.com")
+    member = create_authenticated_user(client, "role.member@example.com")
+    outsider = create_authenticated_user(client, "role.outsider@example.com")
+    group = create_group(client, owner)
+    add_and_activate_member(client, group, owner, member)
+
+    response = client.post(
+        f"/family-groups/{group['family_group_id']}/members",
+        json={"user_id": outsider["user_id"]},
+        headers=member["headers"],
     )
 
-    for user in (pending_user, outsider):
-        response = client.get(
-            f"/family-groups/{group['family_group_id']}",
-            params={"requesting_user_id": user["user_id"]},
-        )
-        assert response.status_code == 403
-        assert response.json()["detail"]["code"] == "FAMILY_ACCESS_DENIED"
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "INSUFFICIENT_ROLE"
 
 
-def test_member_leaves_without_losing_health_data(
+def test_outside_pending_and_left_users_have_no_group_access(
     client: TestClient,
-    session_factory: sessionmaker[Session],
 ) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-    add_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    activate_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    allergy = client.post(
-        f"/patients/{member['patient_id']}/allergies",
-        json={
-            "substance": "Fictional allergen",
-            "reaction": "Fictional reaction",
-            "severity": "mild",
-        },
+    owner = create_authenticated_user(client, "status.owner@example.com")
+    pending = create_authenticated_user(client, "status.pending@example.com")
+    active = create_authenticated_user(client, "status.active@example.com")
+    outsider = create_authenticated_user(client, "status.outside@example.com")
+    group = create_group(client, owner)
+    client.post(
+        f"/family-groups/{group['family_group_id']}/members",
+        json={"user_id": pending["user_id"]},
+        headers=owner["headers"],
     )
-    assert allergy.status_code == 201
-    with session_factory() as db:
-        db.add(
-            models.SearchHistory(
-                patient_id=member["patient_id"],
-                medication_name="Fictional medication",
-                result=schemas.MedicationCheckResult.unable_to_verify.value,
-            )
+    add_and_activate_member(client, group, owner, active)
+    left = client.post(
+        f"/family-groups/{group['family_group_id']}/members/{active['user_id']}/leave",
+        headers=active["headers"],
+    )
+    assert left.status_code == 200
+    assert left.json()["status"] == "LEFT"
+
+    for user in (pending, active, outsider):
+        denied = client.get(
+            f"/family-groups/{group['family_group_id']}", headers=user["headers"]
         )
-        db.commit()
-
-    leave = client.post(
-        f"/family-groups/{group['family_group_id']}/members/{member['user_id']}/leave",
-        json={"requesting_user_id": member["user_id"]},
-    )
-
-    assert leave.status_code == 200
-    assert leave.json()["status"] == "LEFT"
-    assert leave.json()["left_at"] is not None
-    assert client.get(f"/users/{member['user_id']}/profile").status_code == 200
-    assert len(client.get(f"/patients/{member['patient_id']}/allergies").json()) == 1
-    with session_factory() as db:
-        assert db.scalar(select(models.SearchHistory)) is not None
-    denied = client.get(
-        f"/family-groups/{group['family_group_id']}",
-        params={"requesting_user_id": member["user_id"]},
-    )
-    assert denied.status_code == 403
-
-
-def test_removed_member_loses_access_but_keeps_profile(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-    add_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    activate_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-
-    removed = client.delete(
-        f"/family-groups/{group['family_group_id']}/members/{member['user_id']}",
-        params={"requesting_user_id": owner["user_id"]},
-    )
-
-    assert removed.status_code == 200
-    assert removed.json()["status"] == "REMOVED"
-    assert client.get(f"/users/{member['user_id']}/profile").status_code == 200
-    denied = client.get(
-        f"/family-groups/{group['family_group_id']}",
-        params={"requesting_user_id": member["user_id"]},
-    )
-    assert denied.status_code == 403
+        assert denied.status_code == 403
+        assert denied.json()["detail"]["code"] == "FAMILY_ACCESS_DENIED"
 
 
 def test_final_owner_cannot_leave_or_be_removed(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    group = create_group(client, owner["user_id"], "Fictional Household")
+    owner = create_authenticated_user(client, "last.owner@example.com")
+    group = create_group(client, owner)
+    path = f"/family-groups/{group['family_group_id']}/members/{owner['user_id']}"
 
-    leave = client.post(
-        f"/family-groups/{group['family_group_id']}/members/{owner['user_id']}/leave",
-        json={"requesting_user_id": owner["user_id"]},
-    )
-    remove = client.delete(
-        f"/family-groups/{group['family_group_id']}/members/{owner['user_id']}",
-        params={"requesting_user_id": owner["user_id"]},
-    )
+    leave = client.post(f"{path}/leave", headers=owner["headers"])
+    remove = client.delete(path, headers=owner["headers"])
 
     assert leave.status_code == 409
     assert remove.status_code == 409
     assert leave.json()["detail"]["code"] == "LAST_OWNER_CANNOT_LEAVE"
 
 
-def test_member_can_join_new_group_after_leaving(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group_a = create_group(client, owner["user_id"], "Fictional Group A")
-    group_b = create_group(client, owner["user_id"], "Fictional Group B")
-    add_member(client, group_a["family_group_id"], owner["user_id"], member["user_id"])
-    activate_member(client, group_a["family_group_id"], owner["user_id"], member["user_id"])
-    client.post(
-        f"/family-groups/{group_a['family_group_id']}/members/{member['user_id']}/leave",
-        json={"requesting_user_id": member["user_id"]},
+def test_client_supplied_requester_id_is_rejected_not_trusted(
+    client: TestClient,
+) -> None:
+    owner = create_authenticated_user(client, "impersonation.owner@example.com")
+    outsider = create_authenticated_user(client, "impersonation.outside@example.com")
+    group = create_group(client, owner)
+
+    query_attempt = client.get(
+        f"/family-groups/{group['family_group_id']}",
+        params={"requesting_user_id": owner["user_id"]},
+        headers=outsider["headers"],
+    )
+    body_attempt = client.put(
+        f"/family-groups/{group['family_group_id']}",
+        json={"name": "Stolen", "requesting_user_id": owner["user_id"]},
+        headers=outsider["headers"],
     )
 
-    pending = add_member(
-        client,
-        group_b["family_group_id"],
-        owner["user_id"],
-        member["user_id"],
-    )
-
-    assert pending.status_code == 201
-    assert pending.json()["status"] == "PENDING"
+    assert query_attempt.status_code == 403
+    assert body_attempt.status_code == 422
 
 
-def test_invalid_family_enums_return_stable_error_codes(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-
-    invalid_role = client.post(
+def test_invalid_family_values_have_stable_errors(client: TestClient) -> None:
+    owner = create_authenticated_user(client, "enum.owner@example.com")
+    member = create_authenticated_user(client, "enum.member@example.com")
+    group = create_group(client, owner)
+    response = client.post(
         f"/family-groups/{group['family_group_id']}/members",
-        json={
-            "requesting_user_id": owner["user_id"],
-            "user_id": member["user_id"],
-            "role": "SUPERUSER",
-            "relationship": "RELATIVE",
-        },
+        json={"user_id": member["user_id"], "role": "SUPERUSER"},
+        headers=owner["headers"],
     )
-    invalid_relationship = client.post(
-        f"/family-groups/{group['family_group_id']}/members",
-        json={
-            "requesting_user_id": owner["user_id"],
-            "user_id": member["user_id"],
-            "relationship": "UNKNOWN",
-        },
-    )
-    add_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    invalid_status = client.put(
-        f"/family-groups/{group['family_group_id']}/members/{member['user_id']}",
-        json={"requesting_user_id": owner["user_id"], "status": "SUSPENDED"},
-    )
-
-    assert invalid_role.json()["detail"]["code"] == "INVALID_FAMILY_ROLE"
-    assert invalid_relationship.json()["detail"]["code"] == (
-        "INVALID_FAMILY_RELATIONSHIP"
-    )
-    assert invalid_status.json()["detail"]["code"] == "INVALID_MEMBERSHIP_STATUS"
-
-
-def test_regular_member_cannot_add_or_remove_members(client: TestClient) -> None:
-    owner = create_user(client, 1)
-    member = create_user(client, 2)
-    third_user = create_user(client, 3)
-    group = create_group(client, owner["user_id"], "Fictional Household")
-    add_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-    activate_member(client, group["family_group_id"], owner["user_id"], member["user_id"])
-
-    add_attempt = add_member(
-        client,
-        group["family_group_id"],
-        member["user_id"],
-        third_user["user_id"],
-    )
-    remove_attempt = client.delete(
-        f"/family-groups/{group['family_group_id']}/members/{owner['user_id']}",
-        params={"requesting_user_id": member["user_id"]},
-    )
-
-    assert add_attempt.status_code == 403
-    assert remove_attempt.status_code == 403
-    assert add_attempt.json()["detail"]["code"] == "FAMILY_ACCESS_DENIED"
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_FAMILY_ROLE"

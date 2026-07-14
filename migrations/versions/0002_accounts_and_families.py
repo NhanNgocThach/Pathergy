@@ -15,7 +15,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Integer(), primary_key=True),
         sa.Column(
             "email",
-            sa.String(254, collation="NOCASE"),
+            sa.String(254),
             nullable=False,
             unique=True,
         ),
@@ -144,6 +144,7 @@ def upgrade() -> None:
         ["family_group_id", "user_id"],
         unique=True,
         sqlite_where=sa.text("status = 'ACTIVE'"),
+        postgresql_where=sa.text("status = 'ACTIVE'"),
     )
 
     op.create_table(

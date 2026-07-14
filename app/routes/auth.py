@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app import auth_schemas
+from app import auth_schemas, models
 from app.auth_config import AuthSettings, get_auth_settings
 from app.database import get_db
 from app.errors import ServiceError
@@ -44,11 +44,22 @@ def get_current_context(
     settings: AuthSettings = Depends(get_auth_settings),
 ) -> auth.AuthenticatedContext:
     if credentials is None or credentials.scheme.casefold() != "bearer":
-        raise ServiceError(401, "INVALID_ACCESS_TOKEN", "Bearer access token is required")
+        raise ServiceError(
+            401,
+            "AUTHENTICATION_REQUIRED",
+            "Bearer access token is required",
+        )
     token = credentials.credentials.strip()
     if not token:
         raise ServiceError(401, "INVALID_ACCESS_TOKEN", "Bearer access token is required")
     return auth.authenticate_access_token(db, token, settings)
+
+
+def get_current_user(
+    context: auth.AuthenticatedContext = Depends(get_current_context),
+) -> models.UserAccount:
+    """Expose the authenticated account to protected application routes."""
+    return context.user
 
 
 @router.post(

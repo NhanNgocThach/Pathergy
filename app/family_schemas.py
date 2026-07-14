@@ -83,7 +83,6 @@ class UserResponse(BaseModel):
 class FamilyGroupCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    requesting_user_id: int = Field(ge=1)
     name: str = Field(min_length=1, max_length=100)
 
     @field_validator("name", mode="before")
@@ -95,7 +94,6 @@ class FamilyGroupCreate(BaseModel):
 class FamilyGroupUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    requesting_user_id: int = Field(ge=1)
     name: str | None = Field(default=None, min_length=1, max_length=100)
     is_active: bool | None = None
 
@@ -125,7 +123,6 @@ class FamilyGroupResponse(BaseModel):
 class MembershipCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    requesting_user_id: int = Field(ge=1)
     user_id: int = Field(ge=1)
     role: FamilyRole = FamilyRole.member
     relationship: FamilyRelationship = FamilyRelationship.other
@@ -156,7 +153,6 @@ class MembershipCreate(BaseModel):
 class MembershipUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    requesting_user_id: int = Field(ge=1)
     role: FamilyRole | None = None
     relationship: FamilyRelationship | None = None
     status: MembershipStatus | None = None
@@ -207,12 +203,6 @@ class MembershipUpdate(BaseModel):
         return self
 
 
-class MembershipAction(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    requesting_user_id: int = Field(ge=1)
-
-
 class MembershipResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -255,7 +245,6 @@ class PermissionValue(BaseModel):
 class PermissionUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    requesting_user_id: int = Field(ge=1)
     permissions: list[PermissionValue] = Field(min_length=1)
 
     @model_validator(mode="after")

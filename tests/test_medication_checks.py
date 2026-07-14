@@ -7,6 +7,7 @@ from app.main import app
 from app.routes.medications import get_rxnorm_service
 from app.services.rxnorm import MedicationNotFoundError, RxNormTimeoutError
 from app.services.screening import normalize_text
+from tests.helpers import create_authenticated_user
 
 
 class FakeRxNormService:
@@ -51,16 +52,9 @@ def set_rxnorm_result(result: schemas.MedicationSearchResponse) -> None:
 
 
 def create_patient(client: TestClient) -> int:
-    response = client.post(
-        "/patients",
-        json={
-            "first_name": "Avery",
-            "last_name": "Quinn",
-            "date_of_birth": "1992-04-08",
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["id"]
+    user = create_authenticated_user(client, "screening.owner@example.com")
+    client.headers.update(user["headers"])
+    return user["patient_id"]
 
 
 def add_allergy(
@@ -235,6 +229,8 @@ def test_missing_patient_does_not_call_rxnorm_or_store_history(
     client: TestClient,
     session_factory: sessionmaker[Session],
 ) -> None:
+    user = create_authenticated_user(client, "screening.missing@example.com")
+    client.headers.update(user["headers"])
     called = False
 
     class TrackingService:
@@ -247,7 +243,7 @@ def test_missing_patient_does_not_call_rxnorm_or_store_history(
     response = check(client, 999)
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Patient not found"}
+    assert response.json()["detail"]["code"] == "PATIENT_NOT_FOUND"
     assert called is False
     with session_factory() as db:
         assert list(db.scalars(select(models.SearchHistory))) == []

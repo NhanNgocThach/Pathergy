@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,23 +42,25 @@ class Patient(Base):
 
 class Allergy(Base):
     __tablename__ = "allergies"
-    __table_args__ = (
-        UniqueConstraint(
-            "patient_id",
-            "substance",
-            name="uq_allergy_patient_substance",
-        ),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     patient_id: Mapped[int] = mapped_column(
         ForeignKey("patients.id", ondelete="CASCADE"),
         index=True,
     )
-    substance: Mapped[str] = mapped_column(String(100, collation="NOCASE"))
+    substance: Mapped[str] = mapped_column(String(100))
     rxcui: Mapped[str | None] = mapped_column(String(20), nullable=True)
     reaction: Mapped[str | None] = mapped_column(String(200), nullable=True)
     severity: Mapped[str] = mapped_column(String(20))
+
+    __table_args__ = (
+        Index(
+            "uq_allergy_patient_substance_ci",
+            patient_id,
+            func.lower(substance),
+            unique=True,
+        ),
+    )
 
     patient: Mapped[Patient] = relationship(back_populates="allergies")
 
@@ -89,7 +92,7 @@ class UserAccount(Base):
     __tablename__ = "user_accounts"
 
     user_id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(254, collation="NOCASE"), unique=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)
     display_name: Mapped[str] = mapped_column(String(100))
     patient_id: Mapped[int] = mapped_column(
         ForeignKey("patients.id", ondelete="RESTRICT"),
@@ -189,6 +192,7 @@ class FamilyMembership(Base):
             "user_id",
             unique=True,
             sqlite_where=text("status = 'ACTIVE'"),
+            postgresql_where=text("status = 'ACTIVE'"),
         ),
     )
 

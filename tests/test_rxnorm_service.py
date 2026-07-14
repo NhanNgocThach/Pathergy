@@ -17,6 +17,15 @@ def make_service(handler) -> RxNormService:
     return RxNormService(client)
 
 
+@pytest.fixture(autouse=True)
+def clear_rxnorm_suggestion_cache():
+    RxNormService._display_terms = None
+    RxNormService._display_term_rxcuis.clear()
+    yield
+    RxNormService._display_terms = None
+    RxNormService._display_term_rxcuis.clear()
+
+
 def test_search_returns_normalized_medication_and_ingredients() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/REST/rxcui.json":
@@ -67,6 +76,48 @@ def test_search_returns_normalized_medication_and_ingredients() -> None:
     ]
     assert result.ingredient_data_complete is True
     assert "safe" in result.disclaimer.lower()
+
+
+def test_suggestions_are_case_insensitive_deduplicated_prefix_matches() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/REST/displaynames.json":
+            return httpx.Response(
+                200,
+                json={
+                    "displayTermsList": {
+                        "term": [
+                            "Amoxicillin",
+                            "amoxicillin",
+                            "Amoxicillin oral product",
+                            "Amoxapine",
+                            "Aspirin",
+                        ]
+                    }
+                },
+            )
+        assert request.url.path == "/REST/rxcui.json"
+        assert request.url.params["search"] == "2"
+        assert request.url.params["allsrc"] == "0"
+        rxcui = "723" if request.url.params["name"].startswith("Amoxicillin") else "704"
+        return httpx.Response(200, json={"idGroup": {"rxnormId": [rxcui]}})
+
+    result = make_service(handler).suggest_medications("  PARA  ", limit=8)
+
+    assert result == []
+
+    result = make_service(handler).suggest_medications("  AMO  ", limit=8)
+    assert [item.model_dump() for item in result] == [
+        {"rxcui": "723", "name": "Amoxicillin", "rank": 1},
+        {"rxcui": "704", "name": "Amoxapine", "rank": 2},
+    ]
+
+
+def test_invalid_display_terms_response_is_incomplete() -> None:
+    service = make_service(lambda request: httpx.Response(200, json={}))
+
+    with pytest.raises(IncompleteRxNormResponseError):
+        service.suggest_medications("para", limit=8)
+
 
 
 def test_ingredient_concept_returns_itself_as_ingredient() -> None:

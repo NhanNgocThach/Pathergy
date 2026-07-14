@@ -1,33 +1,34 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.orm import Session
 
-from app import family_schemas
+from app import family_schemas, models
 from app.database import get_db
+from app.routes.auth import get_current_user
 from app.services import families
 
 router = APIRouter(prefix="/family-groups", tags=["Family Groups"])
 FamilyGroupId = Annotated[int, Path(ge=1)]
 UserId = Annotated[int, Path(ge=1)]
-RequestingUserId = Annotated[int, Query(ge=1)]
 
 
 @router.post("", response_model=family_schemas.FamilyGroupResponse, status_code=status.HTTP_201_CREATED)
 def create_family_group(
     data: family_schemas.FamilyGroupCreate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.create_family_group(db, data)
+    return families.create_family_group(db, data, current_user.user_id)
 
 
 @router.get("/{family_group_id}", response_model=family_schemas.FamilyGroupResponse)
 def get_family_group(
     family_group_id: FamilyGroupId,
-    requesting_user_id: RequestingUserId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.get_family_group(db, family_group_id, requesting_user_id)
+    return families.get_family_group(db, family_group_id, current_user.user_id)
 
 
 @router.put("/{family_group_id}", response_model=family_schemas.FamilyGroupResponse)
@@ -35,8 +36,11 @@ def update_family_group(
     family_group_id: FamilyGroupId,
     data: family_schemas.FamilyGroupUpdate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.update_family_group(db, family_group_id, data)
+    return families.update_family_group(
+        db, family_group_id, data, current_user.user_id
+    )
 
 
 @router.post(
@@ -48,8 +52,9 @@ def add_member(
     family_group_id: FamilyGroupId,
     data: family_schemas.MembershipCreate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.add_member(db, family_group_id, data)
+    return families.add_member(db, family_group_id, data, current_user.user_id)
 
 
 @router.get(
@@ -58,10 +63,10 @@ def add_member(
 )
 def list_members(
     family_group_id: FamilyGroupId,
-    requesting_user_id: RequestingUserId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.list_members(db, family_group_id, requesting_user_id)
+    return families.list_members(db, family_group_id, current_user.user_id)
 
 
 @router.get(
@@ -71,10 +76,10 @@ def list_members(
 def get_member(
     family_group_id: FamilyGroupId,
     user_id: UserId,
-    requesting_user_id: RequestingUserId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.get_member(db, family_group_id, user_id, requesting_user_id)
+    return families.get_member(db, family_group_id, user_id, current_user.user_id)
 
 
 @router.put(
@@ -86,8 +91,11 @@ def update_member(
     user_id: UserId,
     data: family_schemas.MembershipUpdate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.update_member(db, family_group_id, user_id, data)
+    return families.update_member(
+        db, family_group_id, user_id, data, current_user.user_id
+    )
 
 
 @router.post(
@@ -97,14 +105,14 @@ def update_member(
 def leave_group(
     family_group_id: FamilyGroupId,
     user_id: UserId,
-    data: family_schemas.MembershipAction,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
     return families.leave_group(
         db,
         family_group_id,
         user_id,
-        data.requesting_user_id,
+        current_user.user_id,
     )
 
 
@@ -115,14 +123,14 @@ def leave_group(
 def remove_member(
     family_group_id: FamilyGroupId,
     user_id: UserId,
-    requesting_user_id: RequestingUserId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
     return families.remove_member(
         db,
         family_group_id,
         user_id,
-        requesting_user_id,
+        current_user.user_id,
     )
 
 
@@ -133,14 +141,14 @@ def remove_member(
 def get_permissions(
     family_group_id: FamilyGroupId,
     user_id: UserId,
-    requesting_user_id: RequestingUserId,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
     return families.get_permissions(
         db,
         family_group_id,
         user_id,
-        requesting_user_id,
+        current_user.user_id,
     )
 
 
@@ -153,5 +161,8 @@ def update_permissions(
     user_id: UserId,
     data: family_schemas.PermissionUpdate,
     db: Session = Depends(get_db),
+    current_user: models.UserAccount = Depends(get_current_user),
 ):
-    return families.update_permissions(db, family_group_id, user_id, data)
+    return families.update_permissions(
+        db, family_group_id, user_id, data, current_user.user_id
+    )

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function Tabs({ items, current }: { items: Array<{ href: string; label: string }>; current: string }) { return <nav aria-label="Section navigation" className="flex gap-1 overflow-x-auto border-b">{items.map((item) => <Link key={item.href} href={item.href} aria-current={current === item.href ? "page" : undefined} className="min-h-11 whitespace-nowrap border-b-2 border-transparent px-3 py-3 text-sm font-semibold aria-[current=page]:border-primary aria-[current=page]:text-primary">{item.label}</Link>)}</nav>; }

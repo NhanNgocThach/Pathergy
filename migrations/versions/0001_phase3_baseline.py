@@ -14,6 +14,18 @@ def table_names() -> set[str]:
 
 
 def index_names(table_name: str) -> set[str]:
+    if op.get_bind().dialect.name == "sqlite":
+        return set(
+            op.get_bind()
+            .execute(
+                sa.text(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type = 'index' AND tbl_name = :table_name"
+                ),
+                {"table_name": table_name},
+            )
+            .scalars()
+        )
     return {
         index["name"]
         for index in sa.inspect(op.get_bind()).get_indexes(table_name)
@@ -43,19 +55,10 @@ def upgrade() -> None:
                 sa.ForeignKey("patients.id", ondelete="CASCADE"),
                 nullable=False,
             ),
-            sa.Column(
-                "substance",
-                sa.String(100, collation="NOCASE"),
-                nullable=False,
-            ),
+            sa.Column("substance", sa.String(100), nullable=False),
             sa.Column("rxcui", sa.String(20), nullable=True),
             sa.Column("reaction", sa.String(200), nullable=True),
             sa.Column("severity", sa.String(20), nullable=False),
-            sa.UniqueConstraint(
-                "patient_id",
-                "substance",
-                name="uq_allergy_patient_substance",
-            ),
         )
     else:
         allergy_columns = {
@@ -68,21 +71,11 @@ def upgrade() -> None:
     if "ix_allergies_patient_id" not in index_names("allergies"):
         op.create_index("ix_allergies_patient_id", "allergies", ["patient_id"])
 
-    allergy_inspector = sa.inspect(op.get_bind())
-    unique_column_sets = {
-        tuple(constraint["column_names"])
-        for constraint in allergy_inspector.get_unique_constraints("allergies")
-    }
-    unique_column_sets.update(
-        tuple(index["column_names"])
-        for index in allergy_inspector.get_indexes("allergies")
-        if index.get("unique")
-    )
-    if ("patient_id", "substance") not in unique_column_sets:
+    if "uq_allergy_patient_substance_ci" not in index_names("allergies"):
         op.create_index(
-            "uq_allergy_patient_substance_index",
+            "uq_allergy_patient_substance_ci",
             "allergies",
-            ["patient_id", "substance"],
+            ["patient_id", sa.text("lower(substance)")],
             unique=True,
         )
 

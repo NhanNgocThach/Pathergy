@@ -1,0 +1,15 @@
+"use client";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Users } from "lucide-react";
+import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/feedback/error-state";
+import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/hooks/use-auth";
+import { formatDate } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
+import { familyService } from "@/services/family-service";
+export function FamilyList() { const { user } = useAuth(); const query = useQuery({ queryKey: queryKeys.families(user!.user_id), queryFn: () => familyService.listForUser(user!.user_id) }); const items = [...(query.data ?? [])].sort((a, b) => Number(b.membership.status === "ACTIVE") - Number(a.membership.status === "ACTIVE") || b.membership.membership_id - a.membership.membership_id); return <><PageHeader title="Family groups" description="Roles manage each group. They do not automatically grant access to another member's health information." actions={<Button asChild><Link href="/families/new"><Plus className="size-4" />Create family group</Link></Button>} />{query.isLoading ? <p role="status">Loading family groups…</p> : query.error ? <ErrorState message={query.error.message} onRetry={() => void query.refetch()} /> : !items.length ? <EmptyState icon={Users} title="No family groups" description="Create a family group to become its active owner." action={<Button asChild><Link href="/families/new">Create family group</Link></Button>} /> : <div className="grid gap-4 md:grid-cols-2">{items.map(({ family_group: group, membership }) => <Card key={membership.membership_id}><CardContent className="space-y-4 pt-6"><div className="flex items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{group.name}</h2><p className="text-sm text-muted-foreground">Family #{group.family_group_id}</p></div><Badge variant={membership.status === "ACTIVE" ? "secondary" : "outline"}>{membership.status}</Badge></div><dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="text-muted-foreground">Your role</dt><dd className="font-semibold">{membership.role}</dd></div><div><dt className="text-muted-foreground">Relationship</dt><dd className="font-semibold">{membership.relationship}</dd></div><div><dt className="text-muted-foreground">Joined</dt><dd>{formatDate(membership.joined_at)}</dd></div>{membership.left_at ? <div><dt className="text-muted-foreground">Left/closed</dt><dd>{formatDate(membership.left_at)}</dd></div> : null}</dl>{membership.status === "ACTIVE" ? <Button asChild variant="outline"><Link href={`/families/${group.family_group_id}`}>View family group</Link></Button> : <p className="text-sm text-muted-foreground">Historical or pending memberships do not have normal family-group access.</p>}</CardContent></Card>)}</div>}</>; }

@@ -1,0 +1,11 @@
+"use client";
+import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
+import { MedicationResultPanel } from "@/features/medications/medication-result-panel";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { queryKeys } from "@/lib/query-keys";
+import type { MedicationCheckResult } from "@/types/health";
+export function MedicationResults({ historyId }: { historyId: number }) { const client = useQueryClient(); const result = Number.isInteger(historyId) ? client.getQueryData<MedicationCheckResult>(queryKeys.medicationResult(historyId)) : undefined; if (!result) return <><PageHeader title="Medication check result" /><EmptyState title="Detailed result is no longer available" description="Pathergy stores only the limited screening-history fields returned by the backend. Run a new check to view ingredients and match details." action={<div className="flex justify-center gap-3"><Button asChild><Link href="/medication-check">Run medication check</Link></Button><Button asChild variant="outline"><Link href="/screening-history">View history</Link></Button></div>} /></>; return <><PageHeader title="Medication check result" description={`Result for ${result.medication_query}.`} /><Card><CardContent className="space-y-4 pt-6"><div><p className="text-sm text-muted-foreground">Normalized medication</p><h2 className="text-xl font-bold">{result.normalized_medication_name ?? "Not confirmed"}</h2><p className="text-sm">Medication RxCUI: {result.medication_rxcui ?? "Not confirmed"}</p></div><div><h3 className="font-semibold">Active ingredients</h3>{result.active_ingredients.length ? <ul className="mt-2 list-disc pl-5">{result.active_ingredients.map((ingredient) => <li key={ingredient.rxcui}>{ingredient.name} (RxCUI {ingredient.rxcui})</li>)}</ul> : <p className="mt-2">Active ingredients were not confirmed.</p>}</div></CardContent></Card><MedicationResultPanel result={result} /><div className="flex flex-wrap gap-3"><Button asChild><Link href="/medication-check">Check another medication</Link></Button><Button asChild variant="outline"><Link href="/screening-history">View screening history</Link></Button></div></>; }

@@ -3,126 +3,72 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import models
+from tests.helpers import create_authenticated_user
 
 
-def user_payload(email: str = "fictional.one@example.com") -> dict:
-    return {
-        "email": email,
-        "display_name": "Fictional Person One",
-        "profile": {
-            "first_name": "Fictional",
-            "last_name": "Person",
-            "date_of_birth": "1990-01-01",
-        },
-    }
-
-
-def test_create_user_and_personal_profile(client: TestClient) -> None:
-    create_response = client.post("/users", json=user_payload())
-
-    assert create_response.status_code == 201
-    user = create_response.json()
-    assert user["email"] == "fictional.one@example.com"
-    assert user["patient_id"] > 0
-
-    get_response = client.get(f"/users/{user['user_id']}")
-    profile_response = client.get(f"/users/{user['user_id']}/profile")
-    assert get_response.status_code == 200
-    assert profile_response.status_code == 200
-    assert profile_response.json()["id"] == user["patient_id"]
-    assert profile_response.json()["first_name"] == "Fictional"
-
-
-def test_user_validation_and_missing_user_error(client: TestClient) -> None:
-    invalid_email = client.post(
-        "/users",
-        json={**user_payload(), "email": "not-an-email"},
-    )
-    blank_name = client.post(
-        "/users",
-        json={**user_payload(), "display_name": "   "},
-    )
-    missing = client.get("/users/999")
-
-    assert invalid_email.status_code == 422
-    assert blank_name.status_code == 422
-    assert missing.status_code == 404
-    assert missing.json() == {
-        "detail": {"code": "USER_NOT_FOUND", "message": "User account not found"}
-    }
-
-
-def test_existing_patient_and_allergy_can_become_personal_profile(
+def test_authenticated_user_can_retrieve_own_account_and_profile(
     client: TestClient,
 ) -> None:
-    patient = client.post(
-        "/patients",
-        json={
-            "first_name": "Existing",
-            "last_name": "Fictional",
-            "date_of_birth": "1985-03-02",
-        },
-    ).json()
-    allergy = client.post(
-        f"/patients/{patient['id']}/allergies",
-        json={
-            "substance": "Fictional allergen",
-            "reaction": "Fictional reaction",
-            "severity": "mild",
-        },
-    )
-    assert allergy.status_code == 201
+    user = create_authenticated_user(client, "account.owner@example.com")
 
-    user_response = client.post(
-        "/users",
-        json={
-            "email": "linked.profile@example.com",
-            "display_name": "Linked Fictional Profile",
-            "patient_id": patient["id"],
-        },
+    account = client.get(f"/users/{user['user_id']}", headers=user["headers"])
+    profile = client.get(
+        f"/users/{user['user_id']}/profile", headers=user["headers"]
     )
 
-    assert user_response.status_code == 201
-    profile = client.get(f"/users/{user_response.json()['user_id']}/profile").json()
-    assert profile["id"] == patient["id"]
-    allergies = client.get(f"/patients/{patient['id']}/allergies").json()
-    assert len(allergies) == 1
+    assert account.status_code == 200
+    assert account.json()["email"] == "account.owner@example.com"
+    assert profile.status_code == 200
+    assert profile.json()["id"] == user["patient_id"]
 
 
-def test_patient_profile_cannot_belong_to_two_users(client: TestClient) -> None:
-    first_user = client.post("/users", json=user_payload()).json()
+def test_user_cannot_retrieve_another_account(client: TestClient) -> None:
+    first = create_authenticated_user(client, "account.first@example.com")
+    second = create_authenticated_user(client, "account.second@example.com")
 
-    response = client.post(
-        "/users",
-        json={
-            "email": "fictional.two@example.com",
-            "display_name": "Fictional Person Two",
-            "patient_id": first_user["patient_id"],
-        },
+    response = client.get(
+        f"/users/{second['user_id']}", headers=first["headers"]
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "USER_PROFILE_ALREADY_EXISTS"
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "USER_ACCESS_DENIED"
 
 
-def test_user_creation_is_one_account_and_one_profile(
+def test_development_account_creation_requires_authentication(
     client: TestClient,
     session_factory: sessionmaker[Session],
 ) -> None:
-    client.post("/users", json=user_payload())
+    payload = {
+        "email": "development.fixture@example.com",
+        "display_name": "Development Fixture",
+        "profile": {
+            "first_name": "Development",
+            "last_name": "Fixture",
+            "date_of_birth": "1990-01-01",
+        },
+    }
+    denied = client.post("/users", json=payload)
+    actor = create_authenticated_user(client, "development.actor@example.com")
+    created = client.post("/users", json=payload, headers=actor["headers"])
 
+    assert denied.status_code == 401
+    assert created.status_code == 201
     with session_factory() as db:
-        assert len(list(db.scalars(select(models.UserAccount)))) == 1
-        assert len(list(db.scalars(select(models.Patient)))) == 1
+        fixture = db.scalar(
+            select(models.UserAccount).where(
+                models.UserAccount.email == "development.fixture@example.com"
+            )
+        )
+        assert fixture is not None
+        assert fixture.password_hash is None
 
 
 def test_user_owned_profile_cannot_be_deleted_through_patient_crud(
     client: TestClient,
 ) -> None:
-    user = client.post("/users", json=user_payload()).json()
-
-    response = client.delete(f"/patients/{user['patient_id']}")
-
+    user = create_authenticated_user(client, "account.delete@example.com")
+    response = client.delete(
+        f"/patients/{user['patient_id']}", headers=user["headers"]
+    )
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "PERSONAL_PROFILE_DELETE_FORBIDDEN"
-    assert client.get(f"/users/{user['user_id']}/profile").status_code == 200

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function Pagination({ previous, next }: { previous?: string; next?: string }) { return <nav aria-label="Pagination" className="flex justify-between gap-4">{previous ? <Link className="min-h-11 rounded-md border bg-card px-4 py-3 text-sm font-semibold" href={previous}>Previous</Link> : <span />}{next ? <Link className="min-h-11 rounded-md border bg-card px-4 py-3 text-sm font-semibold" href={next}>Next</Link> : null}</nav>; }

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -107,6 +107,23 @@ class MedicationSearchResponse(BaseModel):
     )
 
 
+class MedicationSuggestion(BaseModel):
+    rxcui: str = Field(description="Stable RxNorm concept identifier")
+    name: str = Field(description="RxNorm medication or ingredient name")
+    rank: int = Field(ge=1, description="Suggestion order for this query")
+
+
+class MedicationSuggestionsData(BaseModel):
+    query: str
+    suggestions: list[MedicationSuggestion]
+
+
+class MedicationSuggestionsResponse(BaseModel):
+    success: bool = True
+    data: MedicationSuggestionsData
+    message: str = "Medication suggestions retrieved successfully."
+
+
 class MedicationCheckResult(str, Enum):
     potential_allergy_match = "POTENTIAL_ALLERGY_MATCH"
     no_recorded_match_found = "NO_RECORDED_MATCH_FOUND"
@@ -156,3 +173,15 @@ class MedicationCheckResponse(BaseModel):
         "Educational prototype only. This result is not medical advice. "
         "Consult a qualified healthcare professional."
     )
+
+
+class SearchHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    medication_name: str
+    normalized_medication_name: str | None
+    medication_rxcui: str | None
+    result: MedicationCheckResult
+    created_at: datetime

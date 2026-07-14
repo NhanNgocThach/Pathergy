@@ -83,7 +83,7 @@ def require_manager(
     }:
         raise ServiceError(
             403,
-            "FAMILY_ACCESS_DENIED",
+            "INSUFFICIENT_ROLE",
             "An OWNER or ADMIN membership is required",
         )
     return membership
@@ -107,17 +107,18 @@ def add_default_permissions(
 def create_family_group(
     db: Session,
     data: family_schemas.FamilyGroupCreate,
+    requesting_user_id: int,
 ) -> models.FamilyGroup:
-    require_user(db, data.requesting_user_id)
+    require_user(db, requesting_user_id)
     group = models.FamilyGroup(
         name=data.name,
-        created_by_user_id=data.requesting_user_id,
+        created_by_user_id=requesting_user_id,
     )
     db.add(group)
     db.flush()
     membership = models.FamilyMembership(
         family_group_id=group.family_group_id,
-        user_id=data.requesting_user_id,
+        user_id=requesting_user_id,
         role=family_schemas.FamilyRole.owner.value,
         relationship_type=family_schemas.FamilyRelationship.self.value,
         status=family_schemas.MembershipStatus.active.value,
@@ -145,9 +146,10 @@ def update_family_group(
     db: Session,
     family_group_id: int,
     data: family_schemas.FamilyGroupUpdate,
+    requesting_user_id: int,
 ) -> models.FamilyGroup:
     group = require_family_group(db, family_group_id)
-    require_manager(db, family_group_id, data.requesting_user_id)
+    require_manager(db, family_group_id, requesting_user_id)
     if data.name is not None:
         group.name = data.name
     if data.is_active is not None:
@@ -160,15 +162,8 @@ def update_family_group(
 def list_user_family_groups(
     db: Session,
     user_id: int,
-    requesting_user_id: int,
 ) -> list[dict[str, object]]:
     require_user(db, user_id)
-    if requesting_user_id != user_id:
-        raise ServiceError(
-            403,
-            "FAMILY_ACCESS_DENIED",
-            "Users may view only their own family memberships",
-        )
     memberships = list(
         db.scalars(
             select(models.FamilyMembership)
@@ -189,9 +184,10 @@ def add_member(
     db: Session,
     family_group_id: int,
     data: family_schemas.MembershipCreate,
+    requesting_user_id: int,
 ) -> models.FamilyMembership:
     require_family_group(db, family_group_id)
-    require_manager(db, family_group_id, data.requesting_user_id)
+    require_manager(db, family_group_id, requesting_user_id)
     require_user(db, data.user_id)
 
     open_membership = db.scalar(
@@ -300,9 +296,10 @@ def update_member(
     family_group_id: int,
     user_id: int,
     data: family_schemas.MembershipUpdate,
+    requesting_user_id: int,
 ) -> models.FamilyMembership:
     require_family_group(db, family_group_id)
-    require_manager(db, family_group_id, data.requesting_user_id)
+    require_manager(db, family_group_id, requesting_user_id)
     membership = latest_membership(db, family_group_id, user_id)
     if membership is None:
         raise ServiceError(404, "FAMILY_MEMBERSHIP_NOT_FOUND", "Family membership not found")
@@ -457,12 +454,13 @@ def update_permissions(
     family_group_id: int,
     user_id: int,
     data: family_schemas.PermissionUpdate,
+    requesting_user_id: int,
 ) -> list[models.FamilyDataPermission]:
     membership = require_own_active_membership(
         db,
         family_group_id,
         user_id,
-        data.requesting_user_id,
+        requesting_user_id,
     )
     existing = {
         permission.data_type: permission
@@ -477,4 +475,4 @@ def update_permissions(
         permission.can_view = permission_data.can_view
         permission.can_edit = permission_data.can_edit
     db.commit()
-    return get_permissions(db, family_group_id, user_id, data.requesting_user_id)
+    return get_permissions(db, family_group_id, user_id, requesting_user_id)

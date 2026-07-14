@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import models
 from app.auth_config import get_auth_settings
 from app.errors import ServiceError
+from tests.helpers import create_authenticated_user
 
 PASSWORD = "StrongPass1!"
 NEW_PASSWORD = "NewStrong2@"
@@ -120,6 +121,7 @@ def test_registration_rejects_duplicate_email_and_weak_password(
 def test_registration_cannot_claim_existing_patient_and_space_is_not_special(
     client: TestClient,
 ) -> None:
+    actor = create_authenticated_user(client, "existing.creator@example.com")
     patient = client.post(
         "/patients",
         json={
@@ -127,6 +129,7 @@ def test_registration_cannot_claim_existing_patient_and_space_is_not_special(
             "last_name": "Patient",
             "date_of_birth": "1991-01-01",
         },
+        headers=actor["headers"],
     ).json()
     claim_data = registration_payload("claim@example.com")
     claim_data.pop("profile")
@@ -138,7 +141,6 @@ def test_registration_cannot_claim_existing_patient_and_space_is_not_special(
     weak = client.post("/auth/register", json=weak_data)
 
     assert claim.status_code == 422
-    assert client.get(f"/patients/{patient['id']}").status_code == 200
     assert weak.status_code == 422
     assert weak.json()["detail"]["code"] == "PASSWORD_TOO_WEAK"
 
@@ -245,6 +247,15 @@ def test_invalid_and_expired_access_tokens_have_stable_errors(
     assert invalid.headers["www-authenticate"] == "Bearer"
     assert expired.status_code == 401
     assert expired.json()["detail"]["code"] == "ACCESS_TOKEN_EXPIRED"
+
+
+def test_missing_access_token_has_authentication_required_error(
+    client: TestClient,
+) -> None:
+    response = client.get("/auth/me")
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "AUTHENTICATION_REQUIRED"
+    assert response.headers["www-authenticate"] == "Bearer"
 
 
 def test_refresh_rotates_token_and_replay_revokes_session(client: TestClient) -> None:

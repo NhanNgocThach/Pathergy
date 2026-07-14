@@ -12,7 +12,9 @@ class DuplicateAllergyError(Exception):
 def handle_allergy_integrity_error(db: Session, error: IntegrityError) -> None:
     """Translate the expected unique-constraint error and preserve other errors."""
     db.rollback()
-    if "unique constraint failed" in str(error.orig).lower():
+    database_message = str(error.orig).lower()
+    sqlstate = getattr(error.orig, "sqlstate", None)
+    if sqlstate == "23505" or "unique" in database_message:
         raise DuplicateAllergyError from error
     raise error
 
@@ -125,3 +127,13 @@ def create_search_history(
     db.commit()
     db.refresh(history)
     return history
+
+
+def list_search_history(db: Session, patient_id: int) -> list[models.SearchHistory]:
+    return list(
+        db.scalars(
+            select(models.SearchHistory)
+            .where(models.SearchHistory.patient_id == patient_id)
+            .order_by(models.SearchHistory.id.desc())
+        )
+    )

@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.services.auth_security import auth_rate_limiter
+from app.security import public_api_rate_limiter
 
 
 @pytest.fixture()
@@ -59,6 +60,7 @@ def client(
             db.close()
 
     auth_rate_limiter.clear()
+    public_api_rate_limiter.clear()
     app.dependency_overrides[get_db] = override_get_db
     # Avoid entering the app lifespan here: it creates production tables using
     # app.database.engine. The test tables above are already ready to use.
@@ -67,3 +69,4 @@ def client(
     test_client.close()
     app.dependency_overrides.clear()
     auth_rate_limiter.clear()
+    public_api_rate_limiter.clear()

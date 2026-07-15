@@ -140,7 +140,16 @@ class InMemoryRateLimiter:
         }
         self._last_cleanup = cutoff
 
-    def check(self, key: str, limit: int) -> None:
+    def check(
+        self,
+        key: str,
+        limit: int,
+        *,
+        capacity_message: str = (
+            "Authentication rate-limit capacity was reached; try again later"
+        ),
+        limit_message: str = "Too many authentication requests; try again later",
+    ) -> None:
         now = time.monotonic()
         cutoff = now - 60
         with self._lock:
@@ -149,14 +158,14 @@ class InMemoryRateLimiter:
                 raise ServiceError(
                     429,
                     "RATE_LIMIT_EXCEEDED",
-                    "Authentication rate-limit capacity was reached; try again later",
+                    capacity_message,
                 )
             events = [event for event in self._events.get(key, []) if event >= cutoff]
             if len(events) >= limit:
                 raise ServiceError(
                     429,
                     "RATE_LIMIT_EXCEEDED",
-                    "Too many authentication requests; try again later",
+                    limit_message,
                 )
             events.append(now)
             self._events[key] = events

@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Importing models registers every table with SQLAlchemy.
 from app import models
@@ -15,6 +16,7 @@ from app.routes import (
     patients,
     users,
 )
+from app.security import add_security_headers, maximum_request_body_bytes
 
 
 app = FastAPI(
@@ -41,6 +43,45 @@ if cors_allowed_origins:
 
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+
+@app.middleware("http")
+async def enforce_request_limits_and_security_headers(
+    request: Request,
+    call_next,
+):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            body_size = int(content_length)
+        except ValueError:
+            response = JSONResponse(
+                status_code=400,
+                content={
+                    "detail": {
+                        "code": "INVALID_CONTENT_LENGTH",
+                        "message": "Content-Length must be a valid integer",
+                    }
+                },
+            )
+            add_security_headers(request, response)
+            return response
+        if body_size < 0 or body_size > maximum_request_body_bytes():
+            response = JSONResponse(
+                status_code=413,
+                content={
+                    "detail": {
+                        "code": "REQUEST_TOO_LARGE",
+                        "message": "Request body exceeds the configured limit",
+                    }
+                },
+            )
+            add_security_headers(request, response)
+            return response
+
+    response = await call_next(request)
+    add_security_headers(request, response)
+    return response
 
 app.include_router(patients.router)
 app.include_router(allergies.router)

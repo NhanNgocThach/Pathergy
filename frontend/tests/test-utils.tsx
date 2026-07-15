@@ -5,10 +5,11 @@ import type { ReactElement, ReactNode } from "react";
 import { AuthProvider } from "@/features/auth/auth-provider";
 import { ToastProvider } from "@/components/feedback/toast-provider";
 import { ProfileContext, type ProfileContextValue, type ProfileOption } from "@/features/profiles/profile-provider";
+import { I18nProvider } from "@/i18n/i18n-provider";
 
 function TestProviders({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return <QueryClientProvider client={queryClient}><AuthProvider><ToastProvider>{children}</ToastProvider></AuthProvider></QueryClientProvider>;
+  return <I18nProvider><QueryClientProvider client={queryClient}><AuthProvider><ToastProvider>{children}</ToastProvider></AuthProvider></QueryClientProvider></I18nProvider>;
 }
 
 export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) {

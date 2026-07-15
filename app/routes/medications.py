@@ -2,9 +2,10 @@ from collections.abc import Generator
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app import schemas
+from app.security import check_public_api_rate_limit
 from app.services.rxnorm import (
     RXNORM_BASE_URL,
     RXNORM_TIMEOUT_SECONDS,
@@ -35,6 +36,7 @@ def get_rxnorm_service() -> Generator[RxNormService, None, None]:
     },
 )
 def suggest_medications(
+    request: Request,
     search_text: Annotated[
         str,
         Query(
@@ -48,6 +50,7 @@ def suggest_medications(
     limit: Annotated[int, Query(ge=1, le=10)] = 8,
     rxnorm_service: RxNormService = Depends(get_rxnorm_service),
 ) -> schemas.MedicationSuggestionsResponse:
+    check_public_api_rate_limit(request)
     cleaned_query = search_text.strip()
     if len(cleaned_query) < 2:
         raise HTTPException(
@@ -91,6 +94,7 @@ def suggest_medications(
     },
 )
 def search_medication(
+    request: Request,
     name: Annotated[
         str,
         Query(
@@ -102,6 +106,7 @@ def search_medication(
     ],
     rxnorm_service: RxNormService = Depends(get_rxnorm_service),
 ) -> schemas.MedicationSearchResponse:
+    check_public_api_rate_limit(request)
     drug_name = name.strip()
     if len(drug_name) < 2:
         raise HTTPException(

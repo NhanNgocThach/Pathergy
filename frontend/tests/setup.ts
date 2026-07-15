@@ -28,6 +28,7 @@ afterEach(() => {
   server.resetHandlers();
   tokenStore.clear();
   window.sessionStorage.clear();
+  window.localStorage.clear();
   navigationMocks.replace.mockReset();
   navigationMocks.push.mockReset();
 });

@@ -35,6 +35,10 @@ frontend for all currently implemented user-facing APIs.
 - RxNorm medication search, conservative allergy screening, and history UI
 - Family groups, memberships, roles, enforced sharing permissions, and profiles
 - Responsive desktop/mobile navigation and accessible status handling
+- English, Vietnamese, and Simplified Chinese language selection for the shared
+  shell, authentication, dashboard, and account-settings experience
+- Browser security headers, a 64 KiB request-body limit, and separate abuse
+  throttling for public RxNorm endpoints
 - Swagger documentation and automated tests
 
 This phase does not add OAuth, social login, passkeys, biometric login, QR or
@@ -408,8 +412,16 @@ password, then changes the password and revokes all sessions. Both flows require
 the same password-strength rules as registration.
 
 Five consecutive invalid password attempts temporarily lock the account for 15
-minutes. The included rate limiter is an in-memory development hook; it is not a
-shared production rate limiter.
+minutes. Authentication and public RxNorm requests have separate in-memory rate
+limits. The included limiters are per process and are not a shared production
+rate-limit or large-scale DDoS solution.
+
+API responses add browser security headers that prevent framing and MIME
+sniffing, restrict browser capabilities, and disable caching on authenticated or
+health-data routes. JSON request bodies are capped at 64 KiB by default. The
+Next.js production build adds its own framing, MIME, referrer, permissions, CSP,
+and HTTPS transport headers. These controls are defense in depth; Vercel/Render
+edge protection is still the first line of defense against distributed traffic.
 
 ### Production considerations
 
@@ -641,6 +653,9 @@ memberships, final-owner protection, and requester-ID impersonation attempts.
 - There is no OAuth, MFA, verified family consent, or production audit identity.
 - The in-memory rate limiter is per process and is unsuitable for multiple server
   instances.
+- A free single-instance application cannot guarantee availability during a
+  large distributed denial-of-service attack. App limits reduce ordinary abuse;
+  provider edge controls must absorb distributed traffic.
 - Development verification/reset URLs expose bearer-like single-use tokens in API
   responses and must be disabled in production.
 - The browser client holds its access token in memory and refresh token
@@ -660,7 +675,8 @@ guardianship, or consent.
 
 QR and email invitations, phone/SMS authentication, passkeys, Face ID,
 fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
-document uploads, multilingual support, AI, AWS, Docker, FHIR, openFDA, DailyMed,
+document uploads, full translation of every backend validation message, AI, AWS,
+Docker, FHIR, openFDA, DailyMed,
 drug interactions, food recommendations, and unsupported backend/frontend
 features are not included.
 

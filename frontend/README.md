@@ -21,6 +21,7 @@ lib/                 API client, token store, query keys, formatting, utilities
 schemas/             Zod form schemas aligned with backend validation
 services/            Typed endpoint calls without backend business logic
 types/               TypeScript API response and domain types
+i18n/                Dependency-free English, Vietnamese, and Chinese messages
 tests/               Vitest/RTL tests and MSW backend mocks
 ```
 
@@ -93,7 +94,7 @@ npm start
 
 Tests mock FastAPI with MSW and never call RxNorm or a live backend. Playwright
 is not configured because the current repository has no isolated E2E database
-seeding/reset contract. Backend API tests and 57 frontend unit/component tests
+seeding/reset contract. Backend API tests and 59 frontend unit/component tests
 cover the current deterministic workflows.
 
 ## Backend connection
@@ -190,6 +191,23 @@ communicated with icons, headings, text, and styling rather than color alone.
 - Minimum 44px controls and reduced-motion support.
 - Desktop sidebar, mobile bottom navigation and mobile “More” dialog.
 - Allergy rows transform to cards on small screens; other tables scroll safely.
+
+## Languages
+
+The shared interface includes English, Vietnamese, and Simplified Chinese. The
+selector appears on public authentication screens and in the protected desktop
+and mobile shells. The choice is stored in browser `localStorage`, and the page
+language attribute updates for assistive technology. English remains the
+fallback when a message has not yet been translated; backend validation and
+third-party RxNorm messages are not rewritten by the browser.
+
+## Browser security headers
+
+Next.js sends anti-framing, MIME-sniffing, referrer, and browser-capability
+headers on every route. Production additionally sends HSTS and a restrictive
+Content Security Policy that permits API connections only to the deployed
+Pathergy API. These headers reduce common browser attacks but do not replace
+backend authorization or hosting-provider DDoS protection.
 
 ## Current backend-driven limitations
 

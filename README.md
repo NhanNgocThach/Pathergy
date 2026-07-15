@@ -674,5 +674,9 @@ backend, and Neon PostgreSQL database. See
 Alembic command, automatic deployment flow, authentication limitations, free
 tier cold starts, and steps for returning to local development.
 
+- Live web application: <https://pathergy.vercel.app>
+- Live API documentation: <https://pathergy-api.onrender.com/docs>
+- Live API health check: <https://pathergy-api.onrender.com/health>
+
 This configuration is for fictional portfolio data only. It is not described as
 production-ready or HIPAA-compliant.

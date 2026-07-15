@@ -94,7 +94,7 @@ npm start
 
 Tests mock FastAPI with MSW and never call RxNorm or a live backend. Playwright
 is not configured because the current repository has no isolated E2E database
-seeding/reset contract. Backend API tests and 59 frontend unit/component tests
+seeding/reset contract. Backend API tests and 61 frontend unit/component tests
 cover the current deterministic workflows.
 
 ## Backend connection
@@ -194,12 +194,15 @@ communicated with icons, headings, text, and styling rather than color alone.
 
 ## Languages
 
-The shared interface includes English, Vietnamese, and Simplified Chinese. The
-selector appears on public authentication screens and in the protected desktop
-and mobile shells. The choice is stored in browser `localStorage`, and the page
-language attribute updates for assistive technology. English remains the
-fallback when a message has not yet been translated; backend validation and
-third-party RxNorm messages are not rewritten by the browser.
+The current web interface includes English, Vietnamese, and Simplified Chinese
+across authentication, profiles, allergies, medication screening, history,
+families, permissions, sessions, and shared feedback states. The selector
+appears on public authentication screens and in the protected desktop and mobile
+shells. The choice is stored in browser `localStorage`; the page language and
+route title update for assistive technology and browser navigation. Common known
+validation and API messages are localized. User-entered names, RxNorm medication
+data, and arbitrary backend or third-party messages remain in their source
+language instead of being translated inaccurately.
 
 ## Browser security headers
 

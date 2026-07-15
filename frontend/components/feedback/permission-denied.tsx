@@ -1,3 +1,6 @@
+"use client";
+
 import { LockKeyhole } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-export function PermissionDenied({ description = "This profile has not shared access to this information." }: { description?: string }) { return <EmptyState icon={LockKeyhole} title="Permission required" description={description} />; }
+import { useI18n } from "@/i18n/i18n-provider";
+export function PermissionDenied({ description }: { description?: string }) { const { t } = useI18n(); return <EmptyState icon={LockKeyhole} title={t("common.permissionRequired")} description={description ?? t("common.permissionDefault")} />; }

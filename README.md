@@ -35,8 +35,9 @@ frontend for all currently implemented user-facing APIs.
 - RxNorm medication search, conservative allergy screening, and history UI
 - Family groups, memberships, roles, enforced sharing permissions, and profiles
 - Responsive desktop/mobile navigation and accessible status handling
-- English, Vietnamese, and Simplified Chinese language selection for the shared
-  shell, authentication, dashboard, and account-settings experience
+- English, Vietnamese, and Simplified Chinese across the current web interface,
+  including authentication, profiles, allergies, medication screening, history,
+  families, permissions, sessions, validation, and shared feedback states
 - Browser security headers, a 64 KiB request-body limit, and separate abuse
   throttling for public RxNorm endpoints
 - Swagger documentation and automated tests
@@ -675,7 +676,7 @@ guardianship, or consent.
 
 QR and email invitations, phone/SMS authentication, passkeys, Face ID,
 fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
-document uploads, full translation of every backend validation message, AI, AWS,
+document uploads, translation of arbitrary backend or third-party text, AI, AWS,
 Docker, FHIR, openFDA, DailyMed,
 drug interactions, food recommendations, and unsupported backend/frontend
 features are not included.

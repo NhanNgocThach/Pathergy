@@ -2,7 +2,9 @@
 
 import { ErrorMessage } from "@/components/error-message";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/i18n-provider";
 
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4"><ErrorMessage title="Pathergy encountered an unexpected error" message="Try the request again. No medical conclusion should be drawn from an application error." /><Button onClick={reset}>Try again</Button></main>;
+  const { t } = useI18n();
+  return <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4"><ErrorMessage title={t("common.unexpectedError")} message={t("common.unexpectedErrorDescription")} /><Button onClick={reset}>{t("common.tryAgain")}</Button></main>;
 }

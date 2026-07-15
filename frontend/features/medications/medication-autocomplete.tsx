@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n/i18n-provider";
 import { queryKeys } from "@/lib/query-keys";
 import { medicationService } from "@/services/health-service";
 import type { MedicationSuggestion } from "@/types/health";
@@ -30,6 +31,7 @@ export function MedicationAutocomplete({
   describedBy,
   invalid = false,
 }: MedicationAutocompleteProps) {
+  const { t } = useI18n();
   const [debouncedQuery, setDebouncedQuery] = React.useState("");
   const [isOpen, setIsOpen] = React.useState(false);
   const [activeIndex, setActiveIndex] = React.useState(-1);
@@ -129,10 +131,10 @@ export function MedicationAutocomplete({
       aria-invalid={invalid}
     />
 
-    {isOpen ? <div id={listboxId} role="listbox" aria-label="Medication suggestions" className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border bg-card p-1 shadow-lg">
-      {query.isFetching ? <p className="px-3 py-3 text-sm text-muted-foreground" role="status">Loading medication suggestions…</p> : null}
-      {!query.isFetching && query.isSuccess && suggestions.length === 0 ? <p className="px-3 py-3 text-sm text-muted-foreground">No RxNorm suggestions found. You can continue with your own entry.</p> : null}
-      {!query.isFetching && query.error ? <p className="px-3 py-3 text-sm text-muted-foreground" role="status">Suggestions are temporarily unavailable. You can continue with your own entry.</p> : null}
+    {isOpen ? <div id={listboxId} role="listbox" aria-label={t("medication.suggestions")} className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border bg-card p-1 shadow-lg">
+      {query.isFetching ? <p className="px-3 py-3 text-sm text-muted-foreground" role="status">{t("medication.loadingSuggestions")}</p> : null}
+      {!query.isFetching && query.isSuccess && suggestions.length === 0 ? <p className="px-3 py-3 text-sm text-muted-foreground">{t("medication.noSuggestions")}</p> : null}
+      {!query.isFetching && query.error ? <p className="px-3 py-3 text-sm text-muted-foreground" role="status">{t("medication.suggestionsUnavailable")}</p> : null}
       {!query.isFetching ? suggestions.map((suggestion, index) => <button
         id={`${listboxId}-option-${index}`}
         key={suggestion.rxcui}

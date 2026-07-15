@@ -1,7 +1,5 @@
-import type { Metadata } from "next";
-
+"use client";
 import { PageHeader } from "@/components/page-header";
 import { ChangePasswordForm } from "@/features/auth/components/change-password-form";
-
-export const metadata: Metadata = { title: "Change password" };
-export default function ChangePasswordPage() { return <><PageHeader title="Change password" description="Changing your password revokes every active session." /><div className="max-w-xl"><ChangePasswordForm /></div></>; }
+import { useI18n } from "@/i18n/i18n-provider";
+export default function ChangePasswordPage() { const { t } = useI18n(); return <><PageHeader title={t("auth.changePassword")} description={t("auth.changeDescription")} /><div className="max-w-xl"><ChangePasswordForm /></div></>; }

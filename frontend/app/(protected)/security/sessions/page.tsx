@@ -1,7 +1,5 @@
-import type { Metadata } from "next";
-
+"use client";
 import { PageHeader } from "@/components/page-header";
 import { SessionList } from "@/features/auth/components/session-list";
-
-export const metadata: Metadata = { title: "Active sessions" };
-export default function SessionsPage() { return <><PageHeader title="Active sessions" description="Review devices returned by the backend and revoke access when needed." /><SessionList /></>; }
+import { useI18n } from "@/i18n/i18n-provider";
+export default function SessionsPage() { const { t } = useI18n(); return <><PageHeader title={t("auth.activeSessions")} description={t("settings.description")} /><SessionList /></>; }

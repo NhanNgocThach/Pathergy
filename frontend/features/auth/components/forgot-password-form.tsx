@@ -12,12 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/i18n-provider";
+import { localizeKnownText } from "@/i18n/known-text";
 import { forgotPasswordSchema, type ForgotPasswordValues } from "@/schemas/auth";
 import { authService } from "@/services/auth-service";
 import type { DevelopmentLinkResponse } from "@/types/auth";
 
 export function ForgotPasswordForm() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [result, setResult] = React.useState<DevelopmentLinkResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const form = useForm<ForgotPasswordValues>({ resolver: zodResolver(forgotPasswordSchema), defaultValues: { email: "" } });
@@ -27,14 +28,14 @@ export function ForgotPasswordForm() {
     try {
       setResult(await authService.forgotPassword(values));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The request failed.");
+      setError(caught instanceof Error ? caught.message : t("common.requestFailed"));
     }
   }
 
   return <Card>
     <CardHeader><CardTitle>{t("forgot.title")}</CardTitle><CardDescription>{t("forgot.description")}</CardDescription></CardHeader>
     <CardContent>{result ? <div className="space-y-4">
-      <Alert><AlertTitle>{t("forgot.check")}</AlertTitle><AlertDescription>{result.message}</AlertDescription></Alert>
+      <Alert><AlertTitle>{t("forgot.check")}</AlertTitle><AlertDescription>{localizeKnownText(result.message, locale)}</AlertDescription></Alert>
       {result.development_url ? <a className="inline-flex min-h-11 items-center font-semibold text-primary underline" href={result.development_url}>{t("forgot.devLink")}</a> : null}
       <Button asChild className="w-full"><Link href="/login">{t("auth.returnLogin")}</Link></Button>
     </div> : <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>

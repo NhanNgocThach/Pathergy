@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { messages, type Locale } from "@/i18n/messages";
 
@@ -24,6 +25,7 @@ function preferredLocale(): Locale {
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [locale, setLocaleState] = React.useState<Locale>("en");
 
   React.useEffect(() => {
@@ -44,6 +46,32 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       template,
     );
   }, [locale]);
+
+  React.useEffect(() => {
+    const routeKey = pathname === "/login" ? "auth.login"
+      : pathname === "/register" ? "register.title"
+      : pathname === "/forgot-password" ? "forgot.title"
+      : pathname.includes("reset-password") ? "auth.resetTitle"
+      : pathname.includes("verify-email") ? "auth.verifyTitle"
+      : pathname === "/app" ? "nav.dashboard"
+      : pathname === "/my-health/edit" ? "profile.editTitle"
+      : pathname === "/my-health" ? "profile.title"
+      : pathname.includes("/allergies/") && pathname.endsWith("/edit") ? "allergy.edit"
+      : pathname === "/allergies/new" ? "allergy.add"
+      : pathname === "/allergies" ? "allergy.title"
+      : pathname === "/medication-check/results" ? "medication.resultTitle"
+      : pathname === "/medication-check" ? "medication.title"
+      : pathname.startsWith("/screening-history/") ? "history.detailTitle"
+      : pathname === "/screening-history" ? "history.title"
+      : pathname === "/families/new" ? "family.create"
+      : pathname.startsWith("/families/") ? "family.title"
+      : pathname === "/families" ? "family.title"
+      : pathname === "/security/sessions" ? "auth.activeSessions"
+      : pathname === "/change-password" ? "auth.changePassword"
+      : pathname === "/settings" ? "settings.title"
+      : null;
+    document.title = routeKey ? `${t(routeKey)} | Pathergy` : "Pathergy";
+  }, [pathname, t]);
 
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
 }

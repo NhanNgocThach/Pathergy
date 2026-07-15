@@ -73,6 +73,7 @@ health probe is `/health`.
 
 | Variable | Value/source |
 | --- | --- |
+| `PYTHON_VERSION` | `3.12.11`; pins a version with prebuilt dependency wheels |
 | `DATABASE_URL` | Neon pooled PostgreSQL URL; secret |
 | `AUTH_JWT_SECRET` | Render-generated random secret, at least 32 characters |
 | `AUTH_TOKEN_HASH_SECRET` | Different Render-generated random secret |

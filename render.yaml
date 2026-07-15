@@ -9,6 +9,8 @@ services:
     healthCheckPath: /health
     autoDeployTrigger: checksPass
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
       - key: DATABASE_URL
         sync: false
       - key: AUTH_JWT_SECRET

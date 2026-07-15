@@ -146,9 +146,14 @@ reset token. Email delivery is separate future work.
 
 1. Push a commit to `main`.
 2. GitHub Actions runs backend and frontend checks.
-3. Render's `checksPass` trigger rebuilds and deploys the backend after CI passes.
+3. Render's `commit` trigger rebuilds and deploys the backend from that commit.
 4. Vercel builds and deploys the `frontend` project from the same commit.
 5. Render runs Alembic before starting the new API process.
+
+The current portfolio setup deploys immediately from `main`; GitHub Actions
+reports test failures separately and does not gate the Render deployment. Use a
+pull request and wait for its checks before merging when a deployment must be
+test-gated.
 
 ## Return to local development
 

@@ -1,11 +1,23 @@
 "use client";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { useForm } from "react-hook-form";
+
 import { ErrorMessage } from "@/components/error-message";
 import { FormField } from "@/components/form-field";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,13 +28,213 @@ import { formatDate } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
 import { membershipSchema, type MembershipValues } from "@/schemas/family";
 import { familyService } from "@/services/family-service";
-import type { FamilyMembership, FamilyRelationship, FamilyRole, MembershipStatus } from "@/types/family";
-const relationships: FamilyRelationship[] = ["SELF", "SPOUSE", "CHILD", "PARENT", "SIBLING", "RELATIVE", "CAREGIVER", "OTHER"];
+import type {
+  FamilyMembership,
+  FamilyRelationship,
+  FamilyRole,
+  MembershipStatus,
+} from "@/types/family";
+
+const relationships: FamilyRelationship[] = [
+  "SELF",
+  "SPOUSE",
+  "CHILD",
+  "PARENT",
+  "SIBLING",
+  "RELATIVE",
+  "CAREGIVER",
+  "OTHER",
+];
 const roles: FamilyRole[] = ["OWNER", "ADMIN", "MEMBER"];
 
-function MemberRow({ member, groupId, canManage, currentUserId }: { member: FamilyMembership; groupId: number; canManage: boolean; currentUserId: number }) {
-  const { t } = useI18n(); const client = useQueryClient(); const [role, setRole] = React.useState(member.role); const [relationship, setRelationship] = React.useState(member.relationship); const [status, setStatus] = React.useState<MembershipStatus>(member.status); const update = useMutation({ mutationFn: () => familyService.updateMember(groupId, member.user_id, { role, relationship, status: status as "PENDING" | "ACTIVE" | "DECLINED" }), onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.members(groupId) }) }); const remove = useMutation({ mutationFn: () => familyService.removeMember(groupId, member.user_id), onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.members(groupId) }) }); const open = member.status === "PENDING" || member.status === "ACTIVE";
-  return <li className="rounded-lg border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold">{t("member.user", { id: member.user_id })}{member.user_id === currentUserId ? ` (${t("member.you")})` : ""}</h3><p className="text-sm text-muted-foreground">{t("family.joined")}: {formatDate(member.joined_at)}{member.left_at ? ` · ${t("member.closed")}: ${formatDate(member.left_at)}` : ""}</p></div><Badge variant={member.status === "ACTIVE" ? "secondary" : "outline"}>{t(`status.${member.status}`)}</Badge></div>{canManage && open ? <div className="mt-4 grid gap-3 sm:grid-cols-3"><FormField id={`role-${member.membership_id}`} label={t("member.familyRole")}><Select id={`role-${member.membership_id}`} value={role} onChange={(event) => setRole(event.target.value as FamilyRole)}>{roles.map((item) => <option key={item}>{t(`role.${item}`)}</option>)}</Select></FormField><FormField id={`relationship-${member.membership_id}`} label={t("family.relationship")}><Select id={`relationship-${member.membership_id}`} value={relationship} onChange={(event) => setRelationship(event.target.value as FamilyRelationship)}>{relationships.map((item) => <option key={item}>{t(`relationship.${item}`)}</option>)}</Select></FormField><FormField id={`status-${member.membership_id}`} label={t("member.status")}><Select id={`status-${member.membership_id}`} value={status} onChange={(event) => setStatus(event.target.value as MembershipStatus)}>{member.status === "PENDING" ? ["PENDING", "ACTIVE", "DECLINED"].map((item) => <option key={item}>{t(`status.${item}`)}</option>) : <option value="ACTIVE">{t("status.ACTIVE")}</option>}</Select></FormField><div className="flex flex-wrap gap-2 sm:col-span-3"><Button variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>{t("member.save")}</Button><AlertDialog><AlertDialogTrigger asChild><Button variant="destructive">{t("member.remove")}</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("member.removeTitle", { id: member.user_id })}</AlertDialogTitle><AlertDialogDescription>{t("member.removeDescription")}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); remove.mutate(); }}>{t("member.remove")}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>{update.error || remove.error ? <p role="alert" className="w-full text-sm text-destructive">{(update.error ?? remove.error)?.message}</p> : null}</div></div> : <dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-muted-foreground">{t("member.familyRole")}</dt><dd className="font-semibold">{t(`role.${member.role}`)}</dd></div><div><dt className="text-muted-foreground">{t("family.relationship")}</dt><dd className="font-semibold">{t(`relationship.${member.relationship}`)}</dd></div></dl>}</li>;
+type MemberRowProps = {
+  member: FamilyMembership;
+  groupId: number;
+  canManage: boolean;
+  currentUserId: number;
+};
+
+function MemberRow({ member, groupId, canManage, currentUserId }: MemberRowProps) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const [role, setRole] = React.useState(member.role);
+  const [relationship, setRelationship] = React.useState(member.relationship);
+  const [status, setStatus] = React.useState<MembershipStatus>(member.status);
+
+  const update = useMutation({
+    mutationFn: () => familyService.updateMember(groupId, member.user_id, {
+      role,
+      relationship,
+      status: status as "PENDING" | "ACTIVE" | "DECLINED",
+    }),
+    onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.members(groupId) }),
+  });
+  const remove = useMutation({
+    mutationFn: () => familyService.removeMember(groupId, member.user_id),
+    onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.members(groupId) }),
+  });
+  const open = member.status === "PENDING" || member.status === "ACTIVE";
+
+  return (
+    <li className="rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-bold">
+            {t("member.user", { id: member.user_id })}
+            {member.user_id === currentUserId ? ` (${t("member.you")})` : ""}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {t("family.joined")}: {formatDate(member.joined_at)}
+            {member.left_at ? ` · ${t("member.closed")}: ${formatDate(member.left_at)}` : ""}
+          </p>
+        </div>
+        <Badge variant={member.status === "ACTIVE" ? "secondary" : "outline"}>
+          {t(`status.${member.status}`)}
+        </Badge>
+      </div>
+
+      {canManage && open ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <FormField id={`role-${member.membership_id}`} label={t("member.familyRole")}>
+            <Select
+              id={`role-${member.membership_id}`}
+              value={role}
+              onChange={(event) => setRole(event.target.value as FamilyRole)}
+            >
+              {roles.map((item) => <option key={item} value={item}>{t(`role.${item}`)}</option>)}
+            </Select>
+          </FormField>
+          <FormField id={`relationship-${member.membership_id}`} label={t("family.relationship")}>
+            <Select
+              id={`relationship-${member.membership_id}`}
+              value={relationship}
+              onChange={(event) => setRelationship(event.target.value as FamilyRelationship)}
+            >
+              {relationships.map((item) => (
+                <option key={item} value={item}>{t(`relationship.${item}`)}</option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField id={`status-${member.membership_id}`} label={t("member.status")}>
+            <Select
+              id={`status-${member.membership_id}`}
+              value={status}
+              onChange={(event) => setStatus(event.target.value as MembershipStatus)}
+            >
+              {member.status === "PENDING"
+                ? ["PENDING", "ACTIVE", "DECLINED"].map((item) => (
+                    <option key={item} value={item}>{t(`status.${item}`)}</option>
+                  ))
+                : <option value="ACTIVE">{t("status.ACTIVE")}</option>}
+            </Select>
+          </FormField>
+          <div className="flex flex-wrap gap-2 sm:col-span-3">
+            <Button variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
+              {t("member.save")}
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild><Button variant="destructive">{t("member.remove")}</Button></AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t("member.removeTitle", { id: member.user_id })}</AlertDialogTitle>
+                  <AlertDialogDescription>{t("member.removeDescription")}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                  <AlertDialogAction onClick={(event) => { event.preventDefault(); remove.mutate(); }}>
+                    {t("member.remove")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            {update.error || remove.error ? (
+              <p role="alert" className="w-full text-sm text-destructive">
+                {(update.error ?? remove.error)?.message}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div><dt className="text-muted-foreground">{t("member.familyRole")}</dt><dd className="font-semibold">{t(`role.${member.role}`)}</dd></div>
+          <div><dt className="text-muted-foreground">{t("family.relationship")}</dt><dd className="font-semibold">{t(`relationship.${member.relationship}`)}</dd></div>
+        </dl>
+      )}
+    </li>
+  );
 }
 
-export function MemberManagement({ groupId, members, canManage, currentUserId }: { groupId: number; members: FamilyMembership[]; canManage: boolean; currentUserId: number }) { const { t } = useI18n(); const client = useQueryClient(); const [error, setError] = React.useState<string | null>(null); const form = useForm<MembershipValues>({ resolver: zodResolver(membershipSchema), defaultValues: { user_id: 0, role: "MEMBER", relationship: "OTHER" } }); const add = useMutation({ mutationFn: (values: MembershipValues) => familyService.addMember(groupId, values), onSuccess: () => { form.reset(); void client.invalidateQueries({ queryKey: queryKeys.members(groupId) }); }, onError: (caught: Error) => setError(caught.message) }); return <Card><CardHeader><CardTitle>{t("member.title")}</CardTitle></CardHeader><CardContent className="space-y-5">{canManage ? <form noValidate className="rounded-md bg-muted p-4" onSubmit={form.handleSubmit((values) => { setError(null); add.mutate(values); })}><h3 className="font-bold">{t("member.addExisting")}</h3><p className="mt-1 text-sm text-muted-foreground">{t("member.addDescription")}</p>{error ? <ErrorMessage message={error} /> : null}<div className="mt-4 grid gap-3 sm:grid-cols-3"><FormField id="new-user-id" label={t("member.existingId")} error={form.formState.errors.user_id?.message}><Input id="new-user-id" type="number" min={1} {...form.register("user_id", { valueAsNumber: true })} /></FormField><FormField id="new-role" label={t("member.initialRole")}><Select id="new-role" {...form.register("role")}>{roles.map((item) => <option key={item}>{t(`role.${item}`)}</option>)}</Select></FormField><FormField id="new-relationship" label={t("family.relationship")}><Select id="new-relationship" {...form.register("relationship")}>{relationships.map((item) => <option key={item}>{t(`relationship.${item}`)}</option>)}</Select></FormField></div><Button className="mt-3" type="submit" disabled={add.isPending}>{add.isPending ? t("member.adding") : t("member.addPending")}</Button></form> : <p className="text-sm text-muted-foreground">{t("member.managementOnly")}</p>}<ul className="space-y-3">{members.map((member) => <MemberRow key={member.membership_id} member={member} groupId={groupId} canManage={canManage} currentUserId={currentUserId} />)}</ul></CardContent></Card>; }
+type MemberManagementProps = {
+  groupId: number;
+  members: FamilyMembership[];
+  canManage: boolean;
+  currentUserId: number;
+};
+
+export function MemberManagement({ groupId, members, canManage, currentUserId }: MemberManagementProps) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const [error, setError] = React.useState<string | null>(null);
+  const form = useForm<MembershipValues>({
+    resolver: zodResolver(membershipSchema),
+    defaultValues: { user_id: 0, role: "MEMBER", relationship: "OTHER" },
+  });
+  const add = useMutation({
+    mutationFn: (values: MembershipValues) => familyService.addMember(groupId, values),
+    onSuccess: () => {
+      form.reset();
+      void client.invalidateQueries({ queryKey: queryKeys.members(groupId) });
+    },
+    onError: (caught: Error) => setError(caught.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>{t("member.title")}</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        {canManage ? (
+          <form
+            noValidate
+            className="rounded-md bg-muted p-4"
+            onSubmit={form.handleSubmit((values) => { setError(null); add.mutate(values); })}
+          >
+            <h3 className="font-bold">{t("member.addExisting")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t("member.addDescription")}</p>
+            {error ? <ErrorMessage message={error} /> : null}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <FormField id="new-user-id" label={t("member.existingId")} error={form.formState.errors.user_id?.message}>
+                <Input id="new-user-id" type="number" min={1} {...form.register("user_id", { valueAsNumber: true })} />
+              </FormField>
+              <FormField id="new-role" label={t("member.initialRole")}>
+                <Select id="new-role" {...form.register("role")}>
+                  {roles.map((item) => <option key={item} value={item}>{t(`role.${item}`)}</option>)}
+                </Select>
+              </FormField>
+              <FormField id="new-relationship" label={t("family.relationship")}>
+                <Select id="new-relationship" {...form.register("relationship")}>
+                  {relationships.map((item) => (
+                    <option key={item} value={item}>{t(`relationship.${item}`)}</option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+            <Button className="mt-3" type="submit" disabled={add.isPending}>
+              {add.isPending ? t("member.adding") : t("member.addPending")}
+            </Button>
+          </form>
+        ) : <p className="text-sm text-muted-foreground">{t("member.managementOnly")}</p>}
+        <ul className="space-y-3">
+          {members.map((member) => (
+            <MemberRow
+              key={member.membership_id}
+              member={member}
+              groupId={groupId}
+              canManage={canManage}
+              currentUserId={currentUserId}
+            />
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}

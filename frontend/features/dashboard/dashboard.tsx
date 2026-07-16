@@ -29,8 +29,11 @@ export function Dashboard() {
   const allergies = useQuery({ queryKey: queryKeys.allergies(patientId), queryFn: () => allergyService.list(patientId) });
   const history = useQuery({ queryKey: queryKeys.history(patientId), queryFn: () => historyService.list(patientId) });
   const families = useQuery({ queryKey: queryKeys.families(user!.user_id), queryFn: () => familyService.listForUser(user!.user_id) });
+  const dashboardName = profile.data
+    ? formatPersonName(profile.data.first_name, profile.data.last_name, locale)
+    : "Pathergy";
   return <>
-    <PageHeader title={t("dashboard.welcome", { name: user?.display_name ?? "Pathergy" })} description={t("dashboard.description")} />
+    <PageHeader title={t("dashboard.welcome", { name: dashboardName })} description={t("dashboard.description")} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Button asChild><Link href="/allergies/new"><Plus className="size-4" />{t("dashboard.addAllergy")}</Link></Button><Button asChild variant="secondary"><Link href="/medication-check"><Pill className="size-4" />{t("dashboard.checkMedication")}</Link></Button><Button asChild variant="outline"><Link href="/screening-history"><Clock3 className="size-4" />{t("dashboard.viewHistory")}</Link></Button><Button asChild variant="outline"><Link href="/families/new"><Users className="size-4" />{t("dashboard.createFamily")}</Link></Button></div>
     <div className="grid gap-6 lg:grid-cols-2">
       <Card><CardHeader><CardTitle className="flex items-center gap-2"><HeartPulse className="size-5" />{t("dashboard.profile")}</CardTitle></CardHeader><CardContent>{profile.isLoading ? <ModuleLoading /> : profile.error ? <ErrorState message={profile.error.message} onRetry={() => void profile.refetch()} /> : profile.data ? <dl className="grid gap-3"><div><dt className="text-sm text-muted-foreground">{t("dashboard.name")}</dt><dd className="font-semibold">{formatPersonName(profile.data.first_name, profile.data.last_name, locale)}</dd></div><div><dt className="text-sm text-muted-foreground">{t("dashboard.birthDate")}</dt><dd>{formatDate(profile.data.date_of_birth)}</dd></div><Button asChild variant="outline" className="mt-2 w-fit"><Link href="/my-health">{t("dashboard.viewProfile")}</Link></Button></dl> : null}</CardContent></Card>

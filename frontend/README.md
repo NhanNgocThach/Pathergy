@@ -94,7 +94,7 @@ npm start
 
 Tests mock FastAPI with MSW and never call RxNorm or a live backend. Playwright
 is not configured because the current repository has no isolated E2E database
-seeding/reset contract. Backend API tests and 61 frontend unit/component tests
+seeding/reset contract. Backend API tests and 62 frontend unit/component tests
 cover the current deterministic workflows.
 
 ## Backend connection

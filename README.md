@@ -12,6 +12,7 @@ frontend for all currently implemented user-facing APIs.
 
 - Patient and allergy CRUD
 - RxNorm medication and active-ingredient lookup
+- Related official DailyMed label references with partial-failure handling
 - Debounced RxNorm medication-name autocomplete with keyboard navigation
 - Conservative medication/allergy screening
 - Persisted medication screening history
@@ -32,14 +33,14 @@ frontend for all currently implemented user-facing APIs.
 - Automatic access-token refresh with single-use refresh-token rotation
 - Frontend form validation, accessible error states, and mocked component tests
 - Dashboard, personal health-profile viewing/editing, and allergy management UI
-- RxNorm medication search, conservative allergy screening, and history UI
+- RxNorm/DailyMed medication details, conservative allergy screening, and history UI
 - Family groups, memberships, roles, enforced sharing permissions, and profiles
 - Responsive desktop/mobile navigation and accessible status handling
 - English, Vietnamese, and Simplified Chinese across the current web interface,
   including authentication, profiles, allergies, medication screening, history,
   families, permissions, sessions, validation, and shared feedback states
 - Browser security headers, a 64 KiB request-body limit, and separate abuse
-  throttling for public RxNorm endpoints
+  throttling for public medication endpoints
 - Swagger documentation and automated tests
 
 This phase does not add OAuth, social login, passkeys, biometric login, QR or
@@ -241,6 +242,29 @@ npm run dev
 Open <http://localhost:3000>. See [frontend/README.md](frontend/README.md) for
 the implemented routes, authentication flow, test commands, token-storage
 decision, and current frontend security limitations.
+
+## Medication information sources
+
+Pathergy keeps external medication sources separate instead of combining them
+into a medical conclusion:
+
+- RxNorm standardizes the entered name, supplies the medication RxCUI, and
+  retrieves standardized active ingredients.
+- DailyMed supplies related U.S. Structured Product Label references for that
+  RxCUI. Pathergy returns at most five recent references with the label title,
+  set ID, version, publication date, and official DailyMed link.
+
+Use `GET /medications/details?name=Augmentin` to retrieve both sources. DailyMed
+failure is non-blocking: confirmed RxNorm data is still returned with DailyMed
+status `UNAVAILABLE` or `INCOMPLETE`. `NOT_FOUND` means DailyMed did not return a
+label associated with that RxCUI. Related labels can represent different brands,
+strengths, dosage forms, or combination products and must not be treated as a
+patient-specific instruction.
+
+Autocomplete remains independent. After two characters and a 350 ms frontend
+debounce, `GET /medications/suggestions` returns up to eight RxNorm prefix
+matches. Choosing a suggestion fills the input but does not start screening.
+All automated tests mock RxNorm and DailyMed; no unit test requires internet.
 
 ## Development account examples
 
@@ -554,10 +578,11 @@ The response membership has `status: "LEFT"` and a `left_at` timestamp.
 | `DELETE` | `/patients/{patient_id}/allergies/{allergy_id}` | Delete an allergy |
 | `GET` | `/medications/suggestions?q={prefix}&limit=8` | Suggest unique RxNorm names and RxCUIs for autocomplete |
 | `GET` | `/medications/search?name={name}` | Search RxNorm ingredients |
+| `GET` | `/medications/details?name={name}` | Combine RxNorm ingredients with related DailyMed label references |
 | `POST` | `/patients/{patient_id}/medication-check` | Check recorded allergies and store history |
 | `GET` | `/patients/{patient_id}/screening-history` | List authorized screening history |
 
-All rows in this table except `/`, `/health`, medication suggestions, and medication search require a Bearer access
+All rows in this table except `/`, `/health`, medication suggestions, medication search, and medication details require a Bearer access
 token. `POST /patients` is additionally development-only.
 
 ### Development accounts

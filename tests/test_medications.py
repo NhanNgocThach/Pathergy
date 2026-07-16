@@ -2,7 +2,12 @@ from fastapi.testclient import TestClient
 
 from app import schemas
 from app.main import app
-from app.routes.medications import get_rxnorm_service
+from app.routes.medications import get_dailymed_service, get_rxnorm_service
+from app.services.dailymed import (
+    DailyMedTimeoutError,
+    DailyMedUnavailableError,
+    IncompleteDailyMedResponseError,
+)
 from app.services.rxnorm import (
     IncompleteRxNormResponseError,
     MedicationNotFoundError,
@@ -49,6 +54,40 @@ class FailingRxNormService:
         raise self.error
 
 
+class SuccessfulDailyMedService:
+    def find_labels(
+        self,
+        rxcui: str,
+        limit: int = 5,
+    ) -> tuple[list[schemas.DailyMedLabelReference], bool]:
+        assert rxcui == "1191"
+        assert limit == 5
+        return [
+            schemas.DailyMedLabelReference(
+                set_id="11111111-2222-3333-4444-555555555555",
+                title="FICTIONAL ASPIRIN LABEL",
+                published_date="Jul 10, 2026",
+                version="3",
+                url=(
+                    "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid="
+                    "11111111-2222-3333-4444-555555555555"
+                ),
+            )
+        ], True
+
+
+class FailingDailyMedService:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def find_labels(
+        self,
+        rxcui: str,
+        limit: int = 5,
+    ) -> tuple[list[schemas.DailyMedLabelReference], bool]:
+        raise self.error
+
+
 def test_medication_search_returns_structured_response(client: TestClient) -> None:
     app.dependency_overrides[get_rxnorm_service] = SuccessfulRxNormService
 
@@ -66,6 +105,84 @@ def test_medication_search_returns_structured_response(client: TestClient) -> No
             "This response does not determine whether a medication is safe."
         ),
     }
+
+
+def test_medication_details_combines_rxnorm_and_dailymed(
+    client: TestClient,
+) -> None:
+    app.dependency_overrides[get_rxnorm_service] = SuccessfulRxNormService
+    app.dependency_overrides[get_dailymed_service] = SuccessfulDailyMedService
+
+    response = client.get("/medications/details", params={"name": " aspirin "})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["normalized_name"] == "aspirin"
+    assert data["active_ingredients"] == [{"rxcui": "1191", "name": "aspirin"}]
+    assert data["dailymed"]["status"] == "AVAILABLE"
+    assert data["dailymed"]["labels"] == [
+        {
+            "set_id": "11111111-2222-3333-4444-555555555555",
+            "title": "FICTIONAL ASPIRIN LABEL",
+            "published_date": "Jul 10, 2026",
+            "version": "3",
+            "url": (
+                "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid="
+                "11111111-2222-3333-4444-555555555555"
+            ),
+        }
+    ]
+    assert "different brands" in data["dailymed"]["disclaimer"]
+
+
+def test_medication_details_returns_not_found_when_no_labels_exist(
+    client: TestClient,
+) -> None:
+    class EmptyDailyMedService:
+        def find_labels(self, rxcui: str, limit: int = 5):
+            return [], True
+
+    app.dependency_overrides[get_rxnorm_service] = SuccessfulRxNormService
+    app.dependency_overrides[get_dailymed_service] = EmptyDailyMedService
+
+    response = client.get("/medications/details", params={"name": "aspirin"})
+
+    assert response.status_code == 200
+    assert response.json()["dailymed"]["status"] == "NOT_FOUND"
+    assert response.json()["dailymed"]["labels"] == []
+
+
+def test_medication_details_keeps_rxnorm_data_when_dailymed_fails(
+    client: TestClient,
+) -> None:
+    cases = [
+        (DailyMedTimeoutError(), "UNAVAILABLE", "timeout"),
+        (DailyMedUnavailableError(), "UNAVAILABLE", "unavailable"),
+        (IncompleteDailyMedResponseError(), "INCOMPLETE", "incomplete"),
+    ]
+    for error, expected_status, expected_message in cases:
+        app.dependency_overrides[get_rxnorm_service] = SuccessfulRxNormService
+        app.dependency_overrides[get_dailymed_service] = lambda error=error: (
+            FailingDailyMedService(error)
+        )
+
+        response = client.get("/medications/details", params={"name": "aspirin"})
+
+        assert response.status_code == 200
+        assert response.json()["normalized_name"] == "aspirin"
+        assert response.json()["dailymed"]["status"] == expected_status
+        assert expected_message in response.json()["dailymed"]["message"].lower()
+
+
+def test_medication_details_validates_name(client: TestClient) -> None:
+    app.dependency_overrides[get_rxnorm_service] = SuccessfulRxNormService
+    app.dependency_overrides[get_dailymed_service] = SuccessfulDailyMedService
+
+    assert client.get("/medications/details").status_code == 422
+    assert client.get(
+        "/medications/details",
+        params={"name": " "},
+    ).status_code == 422
 
 
 def test_medication_suggestions_return_limited_prefix_matches(

@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 import type { AllergyValues, MedicationValues, PatientValues } from "@/schemas/health";
-import type { Allergy, MedicationCheckResult, MedicationSearchResult, MedicationSuggestionsResult, Patient, ScreeningHistory } from "@/types/health";
+import type { Allergy, MedicationCheckResult, MedicationDetailsResult, MedicationSearchResult, MedicationSuggestionsResult, Patient, ScreeningHistory } from "@/types/health";
 
 export const patientService = {
   list: () => apiRequest<Patient[]>("/patients"),
@@ -17,6 +17,7 @@ export const allergyService = {
 export const medicationService = {
   suggestions: (query: string, signal?: AbortSignal) => apiRequest<MedicationSuggestionsResult>(`/medications/suggestions?q=${encodeURIComponent(query)}&limit=8`, { auth: false, signal }),
   search: (name: string) => apiRequest<MedicationSearchResult>(`/medications/search?name=${encodeURIComponent(name)}`, { auth: false }),
+  details: (name: string) => apiRequest<MedicationDetailsResult>(`/medications/details?name=${encodeURIComponent(name)}`, { auth: false }),
   check: (patientId: number, values: MedicationValues) => apiRequest<MedicationCheckResult>(`/patients/${patientId}/medication-check`, { method: "POST", json: values }),
 };
 export const historyService = { list: (patientId: number) => apiRequest<ScreeningHistory[]>(`/patients/${patientId}/screening-history`) };

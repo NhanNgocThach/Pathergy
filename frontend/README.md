@@ -94,13 +94,13 @@ npm start
 
 Tests mock FastAPI with MSW and never call RxNorm or a live backend. Playwright
 is not configured because the current repository has no isolated E2E database
-seeding/reset contract. Backend API tests and 62 frontend unit/component tests
+seeding/reset contract. Backend API tests and 64 frontend unit/component tests
 cover the current deterministic workflows.
 
 ## Backend connection
 
 The frontend uses the existing `/auth`, `/patients`, nested `/allergies`,
-`/medications/suggestions`, `/medications/search`, `/medication-check`, `/screening-history`, `/users`, and
+`/medications/suggestions`, `/medications/search`, `/medications/details`, `/medication-check`, `/screening-history`, `/users`, and
 `/family-groups` endpoints. It normalizes both backend error formats:
 
 ```json
@@ -116,6 +116,12 @@ characters and a 350 ms debounce. The ARIA combobox supports mouse selection,
 Arrow Up/Down, Enter, and Escape. Its requests are cancelled when a newer query
 replaces them. Suggestion failures do not block manual medication search and
 selecting a suggestion never starts allergy screening automatically.
+
+The medication-details action calls `/medications/details`. It keeps the RxNorm
+normalized name, RxCUI, and active ingredients, then displays up to five related
+DailyMed label references. Each reference opens the official DailyMed page in a
+new tab. DailyMed `NOT_FOUND`, `UNAVAILABLE`, and `INCOMPLETE` states do not hide
+confirmed RxNorm information and never become a medication-safety conclusion.
 
 ## Vercel deployment
 

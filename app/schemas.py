@@ -107,6 +107,36 @@ class MedicationSearchResponse(BaseModel):
     )
 
 
+class DailyMedStatus(str, Enum):
+    available = "AVAILABLE"
+    not_found = "NOT_FOUND"
+    unavailable = "UNAVAILABLE"
+    incomplete = "INCOMPLETE"
+
+
+class DailyMedLabelReference(BaseModel):
+    set_id: str = Field(description="DailyMed Structured Product Label set ID")
+    title: str = Field(max_length=1000, description="Official DailyMed label title")
+    published_date: str = Field(description="Publication date supplied by DailyMed")
+    version: str = Field(description="DailyMed SPL version")
+    url: str = Field(description="Official DailyMed label page")
+
+
+class DailyMedLabelData(BaseModel):
+    status: DailyMedStatus
+    labels: list[DailyMedLabelReference]
+    message: str
+    disclaimer: str = (
+        "DailyMed links are official U.S. label references associated with the "
+        "RxCUI. Labels may represent different brands, strengths, dosage forms, "
+        "or combination products and do not provide medical advice."
+    )
+
+
+class MedicationDetailsResponse(MedicationSearchResponse):
+    dailymed: DailyMedLabelData
+
+
 class MedicationSuggestion(BaseModel):
     rxcui: str = Field(description="Stable RxNorm concept identifier")
     name: str = Field(description="RxNorm medication or ingredient name")

@@ -21,10 +21,11 @@ from app.security import add_security_headers, maximum_request_body_bytes
 
 app = FastAPI(
     title="Pathergy API",
-    version="6.1.0",
+    version="6.2.0",
     description=(
         "An educational API for fictional patient records and standardized "
-        "RxNorm medication information and conservative allergy screening. "
+        "RxNorm medication information, related DailyMed label references, "
+        "and conservative allergy screening. "
         "It is an educational prototype with authenticated personal accounts, "
         "ownership checks, and family sharing controls. It does not provide "
         "medical advice."

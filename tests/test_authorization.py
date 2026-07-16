@@ -64,6 +64,7 @@ def test_openapi_marks_protected_and_public_routes(client: TestClient) -> None:
         "security"
     ] == [{"HTTPBearer": []}]
     assert "security" not in schema["paths"]["/medications/search"]["get"]
+    assert "security" not in schema["paths"]["/medications/details"]["get"]
 
 
 def test_unrelated_user_cannot_access_health_data_by_changing_ids(

@@ -156,7 +156,7 @@ describe("medication autocomplete", () => {
     renderWithProfile(<MedicationCheck />);
 
     await user.type(screen.getByRole("combobox", { name: "Medication name" }), "custom medicine");
-    await user.click(screen.getByRole("button", { name: "View medication ingredients" }));
+    await user.click(screen.getByRole("button", { name: "View medication details" }));
 
     expect(await screen.findByText("Fictional medicine 10 MG")).toBeVisible();
   });

@@ -3,6 +3,16 @@ export type Severity = "mild" | "moderate" | "severe";
 export type Allergy = { id: number; patient_id: number; substance: string; rxcui: string | null; reaction: string | null; severity: Severity };
 export type MedicationIngredient = { rxcui: string; name: string };
 export type MedicationSearchResult = { query: string; normalized_name: string; rxcui: string; active_ingredients: MedicationIngredient[]; ingredient_data_complete: boolean; disclaimer: string };
+export type DailyMedStatus = "AVAILABLE" | "NOT_FOUND" | "UNAVAILABLE" | "INCOMPLETE";
+export type DailyMedLabelReference = { set_id: string; title: string; published_date: string; version: string; url: string };
+export type MedicationDetailsResult = MedicationSearchResult & {
+  dailymed: {
+    status: DailyMedStatus;
+    labels: DailyMedLabelReference[];
+    message: string;
+    disclaimer: string;
+  };
+};
 export type MedicationSuggestion = { rxcui: string; name: string; rank: number };
 export type MedicationSuggestionsResult = {
   success: boolean;

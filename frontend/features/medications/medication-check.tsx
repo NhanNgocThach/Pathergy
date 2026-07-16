@@ -13,13 +13,14 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProfileSelector } from "@/features/profiles/profile-selector";
+import { DailyMedLabels } from "@/features/medications/dailymed-labels";
 import { MedicationAutocomplete } from "@/features/medications/medication-autocomplete";
 import { useProfile } from "@/hooks/use-profile";
 import { useI18n } from "@/i18n/i18n-provider";
 import { queryKeys } from "@/lib/query-keys";
 import { medicationSchema, type MedicationValues } from "@/schemas/health";
 import { medicationService } from "@/services/health-service";
-import type { MedicationSearchResult } from "@/types/health";
+import type { MedicationDetailsResult } from "@/types/health";
 
 export function MedicationCheck() {
   const { t } = useI18n();
@@ -27,7 +28,7 @@ export function MedicationCheck() {
   const router = useRouter();
   const client = useQueryClient();
   const [error, setError] = React.useState<string | null>(null);
-  const [reference, setReference] = React.useState<MedicationSearchResult | null>(null);
+  const [reference, setReference] = React.useState<MedicationDetailsResult | null>(null);
   const form = useForm<MedicationValues>({
     resolver: zodResolver(medicationSchema),
     defaultValues: { medication_name: "" },
@@ -43,7 +44,7 @@ export function MedicationCheck() {
     onError: (caught: Error) => setError(caught.message),
   });
   const search = useMutation({
-    mutationFn: (name: string) => medicationService.search(name),
+    mutationFn: (name: string) => medicationService.details(name),
     onSuccess: setReference,
     onError: (caught: Error) => setError(caught.message),
   });
@@ -92,7 +93,7 @@ export function MedicationCheck() {
           <p className="text-sm text-muted-foreground">{t("medication.selectedPerson", { name: `${selected?.first_name ?? ""} ${selected?.last_name ?? ""}`.trim() })}</p>
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={!selectedPatientId || check.isPending || search.isPending}>{check.isPending ? t("medication.checking") : t("medication.check")}</Button>
-            <Button type="button" variant="outline" disabled={check.isPending || search.isPending} onClick={() => void searchReference()}><Search className="size-4" />{search.isPending ? t("medication.searching") : t("medication.viewIngredients")}</Button>
+            <Button type="button" variant="outline" disabled={check.isPending || search.isPending} onClick={() => void searchReference()}><Search className="size-4" />{search.isPending ? t("medication.searching") : t("medication.viewDetails")}</Button>
           </div>
           <div className="sr-only" aria-live="polite">{check.isPending ? t("medication.checkingLive") : search.isPending ? t("medication.searchingLive") : ""}</div>
         </form>
@@ -103,6 +104,7 @@ export function MedicationCheck() {
         <div><p className="text-sm text-muted-foreground">{t("medication.normalizedRxnorm")}</p><h2 className="text-xl font-bold">{reference.normalized_name}</h2><p className="text-sm">{t("medication.rxcui")}: {reference.rxcui}</p></div>
         <div><h3 className="font-semibold">{t("medication.ingredients")}</h3>{reference.active_ingredients.length ? <ul className="mt-2 list-disc space-y-1 pl-5">{reference.active_ingredients.map((ingredient) => <li key={ingredient.rxcui}>{ingredient.name} <span className="text-sm text-muted-foreground">(RxCUI {ingredient.rxcui})</span></li>)}</ul> : <p className="mt-2">{t("medication.ingredientInfoUnconfirmed")}</p>}</div>
         {!reference.ingredient_data_complete ? <p className="rounded-md bg-[#fef0c7] p-3 text-sm font-medium">{t("medication.incomplete")}</p> : null}
+        <DailyMedLabels details={reference} />
         <p className="text-sm text-muted-foreground">{t("notice.medicationDisclaimer")}</p>
       </CardContent>
     </Card> : null}

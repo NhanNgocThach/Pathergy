@@ -17,13 +17,14 @@ import { DailyMedLabels } from "@/features/medications/dailymed-labels";
 import { MedicationAutocomplete } from "@/features/medications/medication-autocomplete";
 import { useProfile } from "@/hooks/use-profile";
 import { useI18n } from "@/i18n/i18n-provider";
+import { formatPersonName } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
 import { medicationSchema, type MedicationValues } from "@/schemas/health";
 import { medicationService } from "@/services/health-service";
 import type { MedicationDetailsResult } from "@/types/health";
 
 export function MedicationCheck() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { selected, selectedPatientId } = useProfile();
   const router = useRouter();
   const client = useQueryClient();
@@ -90,7 +91,7 @@ export function MedicationCheck() {
               />}
             />
           </FormField>
-          <p className="text-sm text-muted-foreground">{t("medication.selectedPerson", { name: `${selected?.first_name ?? ""} ${selected?.last_name ?? ""}`.trim() })}</p>
+          <p className="text-sm text-muted-foreground">{t("medication.selectedPerson", { name: formatPersonName(selected?.first_name ?? "", selected?.last_name ?? "", locale) })}</p>
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={!selectedPatientId || check.isPending || search.isPending}>{check.isPending ? t("medication.checking") : t("medication.check")}</Button>
             <Button type="button" variant="outline" disabled={check.isPending || search.isPending} onClick={() => void searchReference()}><Search className="size-4" />{search.isPending ? t("medication.searching") : t("medication.viewDetails")}</Button>

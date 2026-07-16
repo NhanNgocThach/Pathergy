@@ -81,6 +81,27 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 
 `NEXT_PUBLIC_` values are visible to browsers and must never contain secrets.
 
+## Install on iPhone or Android
+
+The production frontend is an installable Progressive Web App foundation. It
+includes a manifest, generated application and Apple icons, standalone display
+metadata, theme color, and safe-area spacing for phone screens.
+
+- iPhone/iPad: open Pathergy in Safari, choose **Share**, choose **Add to Home
+  Screen**, enable **Open as Web App**, then choose **Add**.
+- Android: open Pathergy in Chrome, open the browser menu, then choose
+  **Install app** or **Add to Home screen**.
+
+The Account Settings page provides the same instructions in English, Vietnamese,
+and Simplified Chinese. When Pathergy is running in standalone display mode, it
+shows an installed-state message instead.
+
+There is deliberately no service worker or offline health-data cache. The
+installed application requires an internet connection and continues using the
+same protected API. Because refresh tokens remain in `sessionStorage`, closing
+the installed app may require another login. This PWA foundation does not add
+biometrics, push notifications, offline records, or a native app package.
+
 ## Commands
 
 ```powershell
@@ -94,8 +115,9 @@ npm start
 
 Tests mock FastAPI with MSW and never call RxNorm or a live backend. Playwright
 is not configured because the current repository has no isolated E2E database
-seeding/reset contract. Backend API tests and 64 frontend unit/component tests
-cover the current deterministic workflows.
+seeding/reset contract. Backend API tests and the frontend unit/component tests
+cover the current deterministic workflows, including the PWA manifest and
+installation guidance.
 
 ## Backend connection
 
@@ -239,7 +261,8 @@ backend authorization or hosting-provider DDoS protection.
 QR/email invitations, phone/SMS login, passkeys, biometrics, OAuth, MFA, doctor
 accounts, prescription issuing, documents, notifications, nutrition, drug
 interactions, AI, FHIR, AWS deployment, a native mobile application, dark mode,
-and unsupported account/family actions remain outside this frontend.
+offline health-data caching, and unsupported account/family actions remain
+outside this frontend.
 
 ## Manual test checklist
 
@@ -257,3 +280,5 @@ and unsupported account/family actions remain outside this frontend.
 10. Switch profiles and confirm the visible health data reloads for that person.
 11. Revoke a non-current session, then revoke the current/all sessions.
 12. Repeat major flows using keyboard only and at a narrow mobile viewport.
+13. Open Account Settings on iPhone Safari or Android Chrome and follow the Home
+    Screen installation instructions.

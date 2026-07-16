@@ -45,7 +45,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
 
   async function handleLogout() { await logout(); router.replace("/login"); }
 
-  return <div className="min-h-screen pb-20 lg:grid lg:grid-cols-[280px_1fr] lg:pb-0">
+  return <div className="min-h-[100dvh] pb-20 lg:grid lg:grid-cols-[280px_1fr] lg:pb-0">
     <aside className="hidden border-r bg-card lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:p-6">
       <div className="mb-5"><p className="text-xl font-bold text-primary">Pathergy</p><p className="text-xs font-medium text-muted-foreground">{t("brand.prototype")}</p></div>
       <LanguageSelector compact />
@@ -53,7 +53,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
       <div className="border-t pt-4"><p className="truncate text-sm font-semibold">{user?.display_name}</p><p className="truncate text-xs text-muted-foreground">{user?.email}</p><Button variant="outline" className="mt-4 w-full" onClick={() => void handleLogout()}><LogOut className="size-4" aria-hidden="true" />{t("auth.logout")}</Button></div>
     </aside>
     <div className="min-w-0">
-      <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b bg-card/95 px-4 backdrop-blur lg:hidden"><Link href="/app" className="font-bold text-primary">Pathergy</Link><LanguageSelector compact /></header>
+      <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-2 border-b bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden"><Link href="/app" className="font-bold text-primary">Pathergy</Link><LanguageSelector compact /></header>
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1200px] space-y-8 p-4 py-6 sm:p-8"><ApplicationNotice />{children}</main>
     </div>
     <nav aria-label={t("nav.mobile")} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">{mobilePrimary.map((item) => <NavLink key={item.href} {...item} pathname={pathname} compact />)}<button type="button" aria-expanded={moreOpen} aria-controls="mobile-more-menu" onClick={() => setMoreOpen((value) => !value)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-md px-2 text-[11px] font-semibold text-muted-foreground"><Menu className="size-5" aria-hidden="true" />{t("nav.more")}</button></nav>

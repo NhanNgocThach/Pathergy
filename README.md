@@ -36,6 +36,7 @@ frontend for all currently implemented user-facing APIs.
 - RxNorm/DailyMed medication details, conservative allergy screening, and history UI
 - Family groups, memberships, roles, enforced sharing permissions, and profiles
 - Responsive desktop/mobile navigation and accessible status handling
+- Installable Progressive Web App metadata and phone Home Screen guidance
 - English, Vietnamese, and Simplified Chinese across the current web interface,
   including authentication, profiles, allergies, medication screening, history,
   families, permissions, sessions, validation, and shared feedback states
@@ -242,6 +243,23 @@ npm run dev
 Open <http://localhost:3000>. See [frontend/README.md](frontend/README.md) for
 the implemented routes, authentication flow, test commands, token-storage
 decision, and current frontend security limitations.
+
+### Install the web application on a phone
+
+The deployed HTTPS frontend includes a web app manifest, generated Pathergy
+icons, standalone display metadata, and mobile safe-area handling. Open
+<https://pathergy.vercel.app> on the phone:
+
+- iPhone/iPad: use Safari, choose **Share**, **Add to Home Screen**, enable
+  **Open as Web App**, then choose **Add**.
+- Android: use Chrome, open the browser menu, then choose **Install app** or
+  **Add to Home screen**.
+
+The installed experience uses the same Next.js frontend and FastAPI backend.
+Pathergy does not register a service worker or cache health data for offline
+use. An internet connection is required, and the current sessionStorage-based
+refresh token may require the user to log in again after the installed web app
+is closed.
 
 ## Medication information sources
 
@@ -702,7 +720,7 @@ guardianship, or consent.
 QR and email invitations, phone/SMS authentication, passkeys, Face ID,
 fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
 document uploads, translation of arbitrary backend or third-party text, AI, AWS,
-Docker, FHIR, openFDA, DailyMed,
+Docker, FHIR, openFDA, offline health-data caching, a native mobile application,
 drug interactions, food recommendations, and unsupported backend/frontend
 features are not included.
 

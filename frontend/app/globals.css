@@ -52,6 +52,11 @@ body {
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .skip-link { position: fixed; left: 1rem; top: -5rem; z-index: 100; border-radius: .5rem; background: var(--foreground); color: var(--card); padding: .75rem 1rem; }
 .skip-link:focus { top: 1rem; }
+.pwa-installed-message { display: none; }
+@media (display-mode: standalone) {
+  .pwa-browser-instructions { display: none; }
+  .pwa-installed-message { display: block; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }

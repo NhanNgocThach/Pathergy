@@ -96,7 +96,7 @@ def login(
     db: Session = Depends(get_db),
     settings: AuthSettings = Depends(get_auth_settings),
 ):
-    apply_rate_limit(request, "login", settings, str(data.email))
+    apply_rate_limit(request, "login", settings, data.login_identifier)
     return auth.login(
         db,
         data,
@@ -174,7 +174,7 @@ def change_password(
 def current_user(
     context: auth.AuthenticatedContext = Depends(get_current_context),
 ):
-    return context.user
+    return auth.current_user_response(context.user)
 
 
 @router.get("/sessions", response_model=list[auth_schemas.SessionResponse])

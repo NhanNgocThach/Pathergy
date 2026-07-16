@@ -1,9 +1,11 @@
 export type CurrentUser = {
   user_id: number;
-  email: string;
+  email: string | null;
+  phone_number_masked: string | null;
   display_name: string;
   patient_id: number;
-  email_verified_at: string;
+  email_verified_at: string | null;
+  phone_verified_at: string | null;
   is_active: boolean;
 };
 

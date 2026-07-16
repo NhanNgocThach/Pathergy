@@ -21,7 +21,7 @@ export function LoginForm({ returnTo = "/app" }: { returnTo?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const form = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
+  const form = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { identifier: "", password: "" } });
 
   async function onSubmit(values: LoginValues) {
     setServerError(null);
@@ -39,8 +39,8 @@ export function LoginForm({ returnTo = "/app" }: { returnTo?: string }) {
       <CardContent>
         <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
           {serverError ? <ErrorMessage message={serverError} title={t("auth.loginFailed")} /> : null}
-          <FormField id="email" label={t("auth.email")} error={form.formState.errors.email?.message}>
-            <Input id="email" type="email" autoComplete="email" aria-invalid={Boolean(form.formState.errors.email)} aria-describedby={form.formState.errors.email ? "email-error" : undefined} {...form.register("email")} />
+          <FormField id="identifier" label={t("auth.emailOrPhone")} hint={t("auth.phoneLoginHint")} error={form.formState.errors.identifier?.message}>
+            <Input id="identifier" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(form.formState.errors.identifier)} aria-describedby={form.formState.errors.identifier ? "identifier-error" : undefined} {...form.register("identifier")} />
           </FormField>
           <FormField id="password" label={t("auth.password")} error={form.formState.errors.password?.message}>
             <PasswordInput id="password" autoComplete="current-password" aria-invalid={Boolean(form.formState.errors.password)} aria-describedby={form.formState.errors.password ? "password-error" : undefined} {...form.register("password")} />

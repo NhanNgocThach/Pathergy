@@ -11,7 +11,7 @@ import type { TokenPair } from "@/types/auth";
 describe("apiRequest", () => {
   it("maps stable backend errors", async () => {
     server.use(http.get(`${API_URL}/example`, () => HttpResponse.json({ detail: { code: "INVALID_CREDENTIALS", message: "Backend wording" } }, { status: 401 })));
-    await expect(apiRequest("/example", { auth: false })).rejects.toMatchObject({ code: "INVALID_CREDENTIALS", message: "The email or password is incorrect." } satisfies Partial<ApiError>);
+    await expect(apiRequest("/example", { auth: false })).rejects.toMatchObject({ code: "INVALID_CREDENTIALS", message: "The email, phone number, or password is incorrect." } satisfies Partial<ApiError>);
   });
 
   it("clears authentication when refresh fails", async () => {

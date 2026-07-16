@@ -72,7 +72,7 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     user_id: int
-    email: EmailStr
+    email: EmailStr | None
     display_name: str
     patient_id: int
     created_at: datetime

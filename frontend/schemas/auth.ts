@@ -2,15 +2,24 @@ import { z } from "zod";
 
 const password = z
   .string()
-  .min(10, "Password must be at least 10 characters.")
-  .max(128, "Password must be 128 characters or fewer.")
-  .regex(/[A-Z]/, "Add an uppercase letter.")
-  .regex(/[a-z]/, "Add a lowercase letter.")
-  .regex(/[0-9]/, "Add a number.")
-  .regex(/[^A-Za-z0-9\s]/, "Add a special character.");
+  .min(6, "Password must be at least 6 characters.")
+  .max(128, "Password must be 128 characters or fewer.");
+
+function isEmailOrVietnamesePhone(value: string) {
+  if (z.email().safeParse(value).success) return true;
+  const compact = value.replace(/[\s().-]+/g, "");
+  return /^(?:0\d{9}|84\d{9}|\+84\d{9})$/.test(compact);
+}
 
 export const loginSchema = z.object({
-  email: z.email("Enter a valid email address."),
+  identifier: z
+    .string()
+    .trim()
+    .min(1, "Enter your email address or phone number.")
+    .refine(
+      isEmailOrVietnamesePhone,
+      "Enter a valid email address or Vietnamese phone number.",
+    ),
   password: z.string().min(1, "Enter your password.").max(128),
 });
 

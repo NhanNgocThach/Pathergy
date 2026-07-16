@@ -23,6 +23,7 @@ frontend for all currently implemented user-facing APIs.
 - Soft leave/removal with membership history retained
 - Separate data-sharing permissions for every family membership
 - Argon2id password hashing and email verification
+- Login with a verified email address or a pre-provisioned Vietnamese phone number
 - JWT access tokens with 15-minute expiration
 - Hashed 30-day refresh tokens with rotation and replay detection
 - Per-device session management, logout, and session revocation
@@ -76,9 +77,11 @@ history. Historical membership rows remain in the database for audit purposes.
 
 ### UserAccount
 
-Each development account contains an email, display name, active flag, and a
-unique `patient_id`. The unique database constraint guarantees that one patient
-profile cannot belong to two user accounts.
+Each development account contains at least one login identifier (email or
+Vietnamese phone number), a display name, active flag, and a unique `patient_id`.
+Email addresses and normalized E.164 phone numbers are independently unique.
+The unique patient constraint guarantees that one patient profile cannot belong
+to two user accounts.
 
 Existing standalone patients remain valid. A new user can either create a new
 profile or link an existing unowned patient profile.
@@ -183,6 +186,8 @@ migrations/
     0001_phase3_baseline.py
     0002_accounts_and_families.py
     0003_authentication.py
+    0004_postgresql_compatibility.py
+    0005_phone_login.py
 tests/                       Unit, API, migration, and regression tests
 frontend/                    Complete Next.js frontend for implemented APIs
 docs/UI_UX_SPECIFICATION.md  Product design and accessibility specification
@@ -380,8 +385,10 @@ POST /auth/register
 }
 ```
 
-Passwords require at least 10 characters with uppercase, lowercase, number, and
-special characters. Only an Argon2id hash is stored.
+Passwords require at least 6 characters and may contain letters, numbers, spaces,
+or special characters. The interface recommends a longer, varied passphrase,
+but character classes are suggestions rather than requirements. Only an
+Argon2id hash is stored.
 
 In development mode, copy the `token` value from the query string in the returned
 `verification_url`, then submit it in the request body:
@@ -400,7 +407,9 @@ deliver the same token.
 
 ### Login, access tokens, and refresh rotation
 
-Only active, verified accounts with a password may log in:
+Only active accounts with a verified login identifier and password may log in.
+The `identifier` field accepts an email address or a Vietnamese number beginning
+with `0`, `84`, or `+84`:
 
 ```http
 POST /auth/login
@@ -408,12 +417,16 @@ POST /auth/login
 
 ```json
 {
-  "email": "fictional.auth@example.com",
+  "identifier": "fictional.auth@example.com",
   "password": "Fictional1!Pass",
   "device_name": "Fictional laptop",
   "device_type": "desktop"
 }
 ```
+
+Existing API clients may temporarily continue sending the legacy `email` field
+instead of `identifier`, but must not send both. Phone numbers are normalized to
+E.164 before lookup and `/auth/me` returns only a masked phone number.
 
 The response contains a 15-minute JWT `access_token` and a 30-day opaque
 `refresh_token`. Send the access token as:
@@ -444,10 +457,11 @@ active sessions and identifies the current one.
 
 ### Password recovery and change
 
-`POST /auth/forgot-password` always returns the same general message to avoid
-revealing whether an email exists. Development mode includes a reset URL for a
-registered password account. Reset tokens expire after one hour, are single-use,
-and are stored only as keyed hashes.
+`POST /auth/forgot-password` remains email-only and always returns the same
+general message to avoid revealing whether an email exists. Development mode
+includes a reset URL for a registered password account. Reset tokens expire
+after one hour, are single-use, and are stored only as keyed hashes. Phone-only
+accounts do not yet have a self-service recovery flow.
 
 `POST /auth/reset-password` changes the password and revokes all sessions.
 `POST /auth/change-password` requires a valid access token and the current
@@ -684,7 +698,8 @@ Tests use isolated temporary or in-memory SQLite databases. RxNorm calls are
 mocked, so the test suite does not require live internet access.
 
 Authentication tests cover registration, duplicate email, Argon2id hashing,
-verification, login, JWT validation, refresh rotation, replay detection, logout,
+email and normalized Vietnamese phone login, masked phone responses, identifier
+verification, JWT validation, refresh rotation, replay detection, logout,
 session management, password reset/change, lockout, and expired/invalid tokens.
 
 Authorization tests cover missing and invalid tokens, own-profile access,
@@ -694,7 +709,14 @@ memberships, final-owner protection, and requester-ID impersonation attempts.
 
 ## Security limitations
 
-- There is no OAuth, MFA, verified family consent, or production audit identity.
+- There is no OAuth, MFA, SMS OTP, verified family consent, or production audit
+  identity.
+- Public registration and password recovery remain email-only. Phone login is
+  limited to phone numbers provisioned and marked verified by an administrator;
+  Pathergy does not claim that an SMS verification occurred.
+- The requested 6-character password minimum prioritizes accessibility over
+  strong production policy. Longer unique passphrases remain recommended, and
+  account lockout plus rate limiting do not replace MFA.
 - The in-memory rate limiter is per process and is unsuitable for multiple server
   instances.
 - A free single-instance application cannot guarantee availability during a
@@ -717,7 +739,8 @@ guardianship, or consent.
 
 ## Deliberately out of scope
 
-QR and email invitations, phone/SMS authentication, passkeys, Face ID,
+QR and email invitations, public phone registration, SMS OTP, phone password
+recovery, passkeys, Face ID,
 fingerprints, Google/Apple login, OAuth, MFA, doctor accounts, prescriptions,
 document uploads, translation of arbitrary backend or third-party text, AI, AWS,
 Docker, FHIR, openFDA, offline health-data caching, a native mobile application,

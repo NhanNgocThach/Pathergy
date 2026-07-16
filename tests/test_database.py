@@ -40,6 +40,20 @@ def test_migrations_create_fresh_database() -> None:
             "password_reset_tokens",
             "alembic_version",
         } <= tables
+        user_columns = {
+            column["name"]: column
+            for column in inspect(connection).get_columns("user_accounts")
+        }
+        user_constraints = {
+            constraint["name"]
+            for constraint in inspect(connection).get_unique_constraints(
+                "user_accounts"
+            )
+        }
+        assert user_columns["email"]["nullable"] is True
+        assert "phone_number" in user_columns
+        assert "phone_verified_at" in user_columns
+        assert "uq_user_accounts_phone_number" in user_constraints
 
 
 def test_migrations_preserve_existing_health_data() -> None:

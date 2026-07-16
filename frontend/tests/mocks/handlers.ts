@@ -5,9 +5,11 @@ export const API_URL = "http://api.test";
 export const currentUser = {
   user_id: 1,
   email: "fictional.user@example.com",
+  phone_number_masked: null,
   display_name: "Fictional User",
   patient_id: 10,
   email_verified_at: "2026-01-01T00:00:00Z",
+  phone_verified_at: null,
   is_active: true,
 };
 

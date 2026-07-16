@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from app import auth_schemas, models
 from app.auth_config import AuthSettings
+from app.auth_identifiers import (
+    mask_phone_number,
+    normalize_email,
+    normalize_login_identifier,
+)
 from app.errors import ServiceError
 from app.services.auth_security import (
     constant_time_hash_matches,
@@ -42,10 +47,6 @@ def as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
-
-
-def normalize_email(email: object) -> str:
-    return str(email).strip().casefold()
 
 
 def register_user(
@@ -205,14 +206,20 @@ def login(
     ip_address: str | None,
     user_agent: str | None,
 ) -> auth_schemas.TokenPairResponse:
-    user = db.scalar(
-        select(models.UserAccount).where(
-            models.UserAccount.email == normalize_email(data.email)
-        )
+    identifier_kind, identifier = normalize_login_identifier(data.login_identifier)
+    identifier_column = (
+        models.UserAccount.email
+        if identifier_kind == "email"
+        else models.UserAccount.phone_number
     )
+    user = db.scalar(select(models.UserAccount).where(identifier_column == identifier))
     if user is None:
         verify_password(DUMMY_PASSWORD_HASH, data.password)
-        raise ServiceError(401, "INVALID_CREDENTIALS", "Email or password is incorrect")
+        raise ServiceError(
+            401,
+            "INVALID_CREDENTIALS",
+            "Email, phone number, or password is incorrect",
+        )
 
     now = utc_now()
     if user.locked_until is not None and as_utc(user.locked_until) > now:
@@ -225,11 +232,25 @@ def login(
         record_failed_login(db, user, settings)
         if user.locked_until is not None:
             raise ServiceError(423, "ACCOUNT_LOCKED", "Account is temporarily locked")
-        raise ServiceError(401, "INVALID_CREDENTIALS", "Email or password is incorrect")
+        raise ServiceError(
+            401,
+            "INVALID_CREDENTIALS",
+            "Email, phone number, or password is incorrect",
+        )
     if not user.is_active:
-        raise ServiceError(401, "INVALID_CREDENTIALS", "Email or password is incorrect")
-    if user.email_verified_at is None:
+        raise ServiceError(
+            401,
+            "INVALID_CREDENTIALS",
+            "Email, phone number, or password is incorrect",
+        )
+    if identifier_kind == "email" and user.email_verified_at is None:
         raise ServiceError(403, "EMAIL_NOT_VERIFIED", "Email address is not verified")
+    if identifier_kind == "phone" and user.phone_verified_at is None:
+        raise ServiceError(
+            403,
+            "PHONE_NOT_VERIFIED",
+            "Phone number is not verified",
+        )
 
     if needs_password_rehash(user.password_hash):
         user.password_hash = hash_password(data.password)
@@ -383,7 +404,10 @@ def authenticate_access_token(
         or session.revoked_at is not None
         or as_utc(session.expires_at) <= utc_now()
         or not user.is_active
-        or user.email_verified_at is None
+        or (
+            user.email_verified_at is None
+            and user.phone_verified_at is None
+        )
     )
     if invalid:
         raise ServiceError(401, "INVALID_ACCESS_TOKEN", "Access token is invalid")
@@ -570,3 +594,18 @@ def change_password(
     context.user.password_hash = hash_password(data.new_password)
     mark_all_sessions_revoked(db, context.user.user_id)
     db.commit()
+
+
+def current_user_response(
+    user: models.UserAccount,
+) -> auth_schemas.CurrentUserResponse:
+    return auth_schemas.CurrentUserResponse(
+        user_id=user.user_id,
+        email=user.email,
+        phone_number_masked=mask_phone_number(user.phone_number),
+        display_name=user.display_name,
+        patient_id=user.patient_id,
+        email_verified_at=user.email_verified_at,
+        phone_verified_at=user.phone_verified_at,
+        is_active=user.is_active,
+    )

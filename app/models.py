@@ -90,9 +90,20 @@ class SearchHistory(Base):
 
 class UserAccount(Base):
     __tablename__ = "user_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "email IS NOT NULL OR phone_number IS NOT NULL",
+            name="ck_user_account_login_identifier",
+        ),
+    )
 
     user_id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(254), unique=True)
+    email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(
+        String(16),
+        unique=True,
+        nullable=True,
+    )
     display_name: Mapped[str] = mapped_column(String(100))
     patient_id: Mapped[int] = mapped_column(
         ForeignKey("patients.id", ondelete="RESTRICT"),
@@ -110,6 +121,10 @@ class UserAccount(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    phone_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

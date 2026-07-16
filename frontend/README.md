@@ -34,7 +34,7 @@ cached health queries, and logout clears the complete query cache.
 
 Public authentication routes:
 
-- `/login`
+- `/login` (verified email or pre-provisioned Vietnamese phone number)
 - `/register`
 - `/verify-email?token=...`
 - `/forgot-password`
@@ -248,7 +248,7 @@ backend authorization or hosting-provider DDoS protection.
   matches, or result messages. The detail page shows only stored list fields.
 - Session listing returns active sessions only. Revoked sessions cannot be shown,
   and “revoke all” includes the current session.
-- Account email and display name cannot be edited.
+- Account email, phone number, and display name cannot be edited.
 - Shared profile responses have no capability metadata; a denied mutation is
   handled as `FAMILY_PERMISSION_DENIED`.
 - Family members cannot be searched by name/email and membership responses do
@@ -258,7 +258,8 @@ backend authorization or hosting-provider DDoS protection.
 
 ## Intentionally not implemented
 
-QR/email invitations, phone/SMS login, passkeys, biometrics, OAuth, MFA, doctor
+QR/email invitations, public phone registration, SMS OTP, phone password
+recovery, passkeys, biometrics, OAuth, MFA, doctor
 accounts, prescription issuing, documents, notifications, nutrition, drug
 interactions, AI, FHIR, AWS deployment, a native mobile application, dark mode,
 offline health-data caching, and unsupported account/family actions remain

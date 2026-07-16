@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+from app.auth_identifiers import normalize_login_identifier
 
 from app.schemas import PatientCreate
 
@@ -37,10 +46,27 @@ class TokenRequest(BaseModel):
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    email: EmailStr
+    identifier: str | None = Field(default=None, min_length=1, max_length=254)
+    email: EmailStr | None = None
     password: str = Field(min_length=1, max_length=128)
     device_name: str | None = Field(default=None, max_length=100)
     device_type: str | None = Field(default=None, max_length=50)
+
+    @field_validator("identifier", mode="before")
+    @classmethod
+    def strip_identifier(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def require_one_identifier(self) -> "LoginRequest":
+        if (self.identifier is None) == (self.email is None):
+            raise ValueError("Provide exactly one email address or phone number")
+        normalize_login_identifier(self.login_identifier)
+        return self
+
+    @property
+    def login_identifier(self) -> str:
+        return self.identifier if self.identifier is not None else str(self.email)
 
 
 class RefreshRequest(BaseModel):
@@ -90,10 +116,12 @@ class MessageResponse(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     user_id: int
-    email: EmailStr
+    email: EmailStr | None
+    phone_number_masked: str | None
     display_name: str
     patient_id: int
-    email_verified_at: datetime
+    email_verified_at: datetime | None
+    phone_verified_at: datetime | None
     is_active: bool
 
 

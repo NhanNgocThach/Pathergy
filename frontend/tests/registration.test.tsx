@@ -20,7 +20,7 @@ describe("RegisterForm", () => {
   it("shows weak-password validation", async () => {
     renderWithProviders(<RegisterForm />);
     await completeRegistrationForm("weak", "weak");
-    expect(await screen.findByText("Password must be at least 10 characters.")).toBeVisible();
+    expect(await screen.findByText("Password must be at least 6 characters.")).toBeVisible();
   });
 
   it("shows password mismatch", async () => {

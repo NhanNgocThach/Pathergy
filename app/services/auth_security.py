@@ -19,22 +19,11 @@ password_hasher = PasswordHasher(type=Type.ID)
 def validate_password_strength(password: str, confirmation: str) -> None:
     if password != confirmation:
         raise ServiceError(422, "PASSWORD_MISMATCH", "Passwords do not match")
-    valid = (
-        len(password) >= 10
-        and any(character.isupper() for character in password)
-        and any(character.islower() for character in password)
-        and any(character.isdigit() for character in password)
-        and any(
-            not character.isalnum() and not character.isspace()
-            for character in password
-        )
-    )
-    if not valid:
+    if len(password) < 6:
         raise ServiceError(
             422,
             "PASSWORD_TOO_WEAK",
-            "Password must be at least 10 characters and include uppercase, "
-            "lowercase, number, and special characters",
+            "Password must be at least 6 characters",
         )
 
 

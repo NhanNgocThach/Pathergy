@@ -11,10 +11,10 @@ describe("LoginForm", () => {
   it("validates required fields and exposes accessible labels", async () => {
     const user = userEvent.setup();
     renderWithProviders(<LoginForm />);
-    expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+    expect(screen.getByLabelText("Email or phone number")).toHaveAttribute("type", "text");
     expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
     await user.click(screen.getByRole("button", { name: "Log in" }));
-    expect(await screen.findByText("Enter a valid email address.")).toBeVisible();
+    expect(await screen.findByText("Enter your email address or phone number.")).toBeVisible();
     expect(screen.getByText("Enter your password.")).toBeVisible();
   });
 
@@ -22,7 +22,7 @@ describe("LoginForm", () => {
     const user = userEvent.setup();
     renderWithProviders(<LoginForm />);
     await user.tab();
-    expect(screen.getByLabelText("Email")).toHaveFocus();
+    expect(screen.getByLabelText("Email or phone number")).toHaveFocus();
     await user.tab();
     expect(screen.getByLabelText("Password")).toHaveFocus();
     await user.tab();
@@ -45,24 +45,25 @@ describe("LoginForm", () => {
     );
     const user = userEvent.setup();
     renderWithProviders(<LoginForm />);
-    await user.type(screen.getByLabelText("Email"), "fictional.user@example.com");
+    await user.type(screen.getByLabelText("Email or phone number"), "fictional.user@example.com");
     await user.type(screen.getByLabelText("Password"), "StrongPass1!");
     await user.click(screen.getByRole("button", { name: "Log in" }));
     await waitFor(() => expect(navigationMocks.replace).toHaveBeenCalledWith("/app"));
     expect(loginBody).toMatchObject({
+      identifier: "fictional.user@example.com",
       device_name: "Web browser",
       device_type: "browser",
     });
   });
 
   it.each([
-    ["INVALID_CREDENTIALS", "The email or password is incorrect."],
+    ["INVALID_CREDENTIALS", "The email, phone number, or password is incorrect."],
     ["EMAIL_NOT_VERIFIED", "Verify your email before logging in."],
   ])("shows the %s backend state", async (code, expectedMessage) => {
     server.use(http.post(`${API_URL}/auth/login`, () => HttpResponse.json({ detail: { code, message: "Backend message" } }, { status: code === "EMAIL_NOT_VERIFIED" ? 403 : 401 })));
     const user = userEvent.setup();
     renderWithProviders(<LoginForm />);
-    await user.type(screen.getByLabelText("Email"), "fictional.user@example.com");
+    await user.type(screen.getByLabelText("Email or phone number"), "fictional.user@example.com");
     await user.type(screen.getByLabelText("Password"), "StrongPass1!");
     await user.click(screen.getByRole("button", { name: "Log in" }));
     expect(await screen.findByText(expectedMessage)).toBeVisible();

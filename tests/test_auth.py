@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
 import jwt
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import models
 from app.auth_config import get_auth_settings
 from app.errors import ServiceError
+from app.services.auth_security import hash_password
 from tests.helpers import create_authenticated_user
 
 PASSWORD = "StrongPass1!"
@@ -95,13 +96,13 @@ def test_registration_hashes_password_and_verification_token(
         assert verification.token_hash != raw_token
 
 
-def test_registration_rejects_duplicate_email_and_weak_password(
+def test_registration_rejects_duplicate_email_short_password_and_mismatch(
     client: TestClient,
 ) -> None:
     register(client)
     duplicate = client.post("/auth/register", json=registration_payload())
     weak_data = registration_payload("weak@example.com")
-    weak_data.update(password="password", confirm_password="password")
+    weak_data.update(password="short", confirm_password="short")
     weak = client.post("/auth/register", json=weak_data)
     mismatch_data = registration_payload("mismatch@example.com")
     mismatch_data["confirm_password"] = "Different1!"
@@ -118,7 +119,7 @@ def test_registration_rejects_duplicate_email_and_weak_password(
     assert invalid_email.status_code == 422
 
 
-def test_registration_cannot_claim_existing_patient_and_space_is_not_special(
+def test_registration_cannot_claim_existing_patient_and_composition_is_optional(
     client: TestClient,
 ) -> None:
     actor = create_authenticated_user(client, "existing.creator@example.com")
@@ -136,13 +137,12 @@ def test_registration_cannot_claim_existing_patient_and_space_is_not_special(
     claim_data["patient_id"] = patient["id"]
     claim = client.post("/auth/register", json=claim_data)
 
-    weak_data = registration_payload("space-special@example.com")
-    weak_data.update(password="NoSpecial1 ", confirm_password="NoSpecial1 ")
-    weak = client.post("/auth/register", json=weak_data)
+    simple_data = registration_payload("simple-password@example.com")
+    simple_data.update(password="letters", confirm_password="letters")
+    simple = client.post("/auth/register", json=simple_data)
 
     assert claim.status_code == 422
-    assert weak.status_code == 422
-    assert weak.json()["detail"]["code"] == "PASSWORD_TOO_WEAK"
+    assert simple.status_code == 201
 
 
 def test_email_verification_is_required_and_single_use(client: TestClient) -> None:
@@ -205,6 +205,83 @@ def test_login_returns_jwt_and_me_returns_current_user(
         headers={"Authorization": f"bearer {tokens['access_token']}"},
     )
     assert lowercase_scheme.status_code == 200
+
+
+def test_login_accepts_normalized_vietnamese_phone_and_masks_response(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+) -> None:
+    with session_factory() as db:
+        patient = models.Patient(
+            first_name="Fictional",
+            last_name="Phone",
+            date_of_birth=date(1990, 1, 1),
+        )
+        db.add(patient)
+        db.flush()
+        db.add(
+            models.UserAccount(
+                email=None,
+                phone_number="+84888888888",
+                display_name="Fictional Phone User",
+                patient_id=patient.id,
+                password_hash=hash_password("simple6"),
+                phone_verified_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        "/auth/login",
+        json={"identifier": "0888 888 888", "password": "simple6"},
+    )
+
+    assert response.status_code == 200
+    me = client.get(
+        "/auth/me",
+        headers=bearer(response.json()["access_token"]),
+    )
+    assert me.status_code == 200
+    assert me.json()["email"] is None
+    assert me.json()["phone_number_masked"] == "+84•••••888"
+    assert "phone_number" not in me.json()
+
+
+def test_phone_login_rejects_invalid_or_unverified_number(
+    client: TestClient,
+    session_factory: sessionmaker[Session],
+) -> None:
+    invalid = client.post(
+        "/auth/login",
+        json={"identifier": "12345", "password": "simple6"},
+    )
+    with session_factory() as db:
+        patient = models.Patient(
+            first_name="Fictional",
+            last_name="Unverified",
+            date_of_birth=date(1990, 1, 1),
+        )
+        db.add(patient)
+        db.flush()
+        db.add(
+            models.UserAccount(
+                email=None,
+                phone_number="+84901234567",
+                display_name="Fictional Unverified User",
+                patient_id=patient.id,
+                password_hash=hash_password("simple6"),
+            )
+        )
+        db.commit()
+
+    unverified = client.post(
+        "/auth/login",
+        json={"identifier": "+84 901 234 567", "password": "simple6"},
+    )
+
+    assert invalid.status_code == 422
+    assert unverified.status_code == 403
+    assert unverified.json()["detail"]["code"] == "PHONE_NOT_VERIFIED"
 
 
 def test_openapi_declares_bearer_authentication(client: TestClient) -> None:

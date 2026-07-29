@@ -1,1 +1,0 @@
-export { AlertDialog as Modal, AlertDialogAction as ModalAction, AlertDialogCancel as ModalCancel, AlertDialogContent as ModalContent, AlertDialogDescription as ModalDescription, AlertDialogFooter as ModalFooter, AlertDialogHeader as ModalHeader, AlertDialogTitle as ModalTitle, AlertDialogTrigger as ModalTrigger } from "@/components/ui/alert-dialog";
